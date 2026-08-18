@@ -16,10 +16,18 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
-/** Keeps the current and imminent flight corridor of every CBC projectile entity-ticking. */
+/**
+ * Keeps every active CBC projectile fully loaded and entity-ticking even with no players nearby.
+ *
+ * The loader synchronously generates FULL chunks in a corridor ahead of the projectile and keeps a
+ * one-chunk safety ring around that corridor. This avoids a fast projectile reaching an unloaded
+ * border between ticks and also allows projectiles to fly into completely new, never-generated terrain.
+ */
 public final class ProjectileChunkLoader {
-    private static final double MIN_FORWARD_MARGIN_BLOCKS = 32.0;
-    private static final double LOOKAHEAD_TICKS = 2.0;
+    private static final double MIN_FORWARD_MARGIN_BLOCKS = 64.0;
+    private static final double LOOKAHEAD_TICKS = 4.0;
+    private static final int CORRIDOR_RADIUS_CHUNKS = 1;
+
     private static final Map<ServerLevel, Long2IntOpenHashMap> CHUNK_REFERENCES =
             Collections.synchronizedMap(new IdentityHashMap<>());
 
@@ -45,8 +53,11 @@ public final class ProjectileChunkLoader {
         }
         Vec3 end = start.add(velocity.scale(lookaheadScale));
 
+        LongSet centerlineChunks = new LongOpenHashSet();
+        traceFlightChunks(level, start.x, start.z, end.x, end.z, centerlineChunks);
+
         LongSet wantedChunks = new LongOpenHashSet();
-        traceFlightChunks(level, start.x, start.z, end.x, end.z, wantedChunks);
+        expandCorridor(level, centerlineChunks, wantedChunks);
 
         LongIterator oldChunks = ticketedChunks.iterator();
         while (oldChunks.hasNext()) {
@@ -58,14 +69,13 @@ public final class ProjectileChunkLoader {
         }
 
         for (long packed : wantedChunks) {
-            if (ticketedChunks.contains(packed)) {
-                continue;
+            if (!ticketedChunks.contains(packed)) {
+                acquireOne(level, packed);
+                ticketedChunks.add(packed);
             }
-            acquireOne(level, packed);
-            ticketedChunks.add(packed);
 
-            // A ticket keeps the chunk active after it is available. Loading a newly entered part of the
-            // corridor here prevents a fast shell from crossing the boundary before the ticket queue catches up.
+            // This call is intentionally synchronous. `create = true` means a missing chunk is generated
+            // all the way to FULL before the projectile can enter it on this tick.
             ChunkPos chunk = new ChunkPos(packed);
             level.getChunkSource().getChunk(chunk.x, chunk.z, ChunkStatus.FULL, true);
         }
@@ -110,6 +120,17 @@ public final class ProjectileChunkLoader {
         }
     }
 
+    private static void expandCorridor(ServerLevel level, LongSet centerline, LongSet output) {
+        for (long packed : centerline) {
+            ChunkPos center = new ChunkPos(packed);
+            for (int dx = -CORRIDOR_RADIUS_CHUNKS; dx <= CORRIDOR_RADIUS_CHUNKS; dx++) {
+                for (int dz = -CORRIDOR_RADIUS_CHUNKS; dz <= CORRIDOR_RADIUS_CHUNKS; dz++) {
+                    addIfInsideHardWorldBounds(level, center.x + dx, center.z + dz, output);
+                }
+            }
+        }
+    }
+
     private static void traceFlightChunks(
             ServerLevel level,
             double startX,
@@ -123,7 +144,7 @@ public final class ProjectileChunkLoader {
         int endChunkX = blockToChunk(endX);
         int endChunkZ = blockToChunk(endZ);
 
-        if (!addIfInsideWorld(level, chunkX, chunkZ, output)) {
+        if (!addIfInsideHardWorldBounds(level, chunkX, chunkZ, output)) {
             return;
         }
 
@@ -151,18 +172,27 @@ public final class ProjectileChunkLoader {
                 tMaxX += tDeltaX;
                 tMaxZ += tDeltaZ;
             }
-            if (!addIfInsideWorld(level, chunkX, chunkZ, output)) {
+            if (!addIfInsideHardWorldBounds(level, chunkX, chunkZ, output)) {
                 break;
             }
         }
     }
 
-    private static boolean addIfInsideWorld(ServerLevel level, int chunkX, int chunkZ, LongSet output) {
+    private static boolean addIfInsideHardWorldBounds(
+            ServerLevel level,
+            int chunkX,
+            int chunkZ,
+            LongSet output
+    ) {
         ChunkPos chunk = new ChunkPos(chunkX, chunkZ);
         BlockPos center = new BlockPos(chunk.getMiddleBlockX(), 0, chunk.getMiddleBlockZ());
-        if (!Level.isInSpawnableBounds(center) || !level.getWorldBorder().isWithinBounds(chunk)) {
+
+        // Do not use the configurable world border here: the requested behaviour is for projectiles to
+        // remain loaded wherever they travel. Only Minecraft's hard coordinate limit is respected.
+        if (!Level.isInSpawnableBounds(center)) {
             return false;
         }
+
         output.add(chunk.toLong());
         return true;
     }
