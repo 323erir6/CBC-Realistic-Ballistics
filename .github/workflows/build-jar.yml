@@ -1,0 +1,118 @@
+name: Build CBC Realistic Ballistics JAR
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'build/libs/**'
+      - 'build-action.log'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Download compile dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ../_deps_CreateBigCannons
+
+          python3 - <<'PY'
+          import json
+          import urllib.request
+
+          req = urllib.request.Request(
+              'https://api.modrinth.com/v2/version/bOiDu0LS',
+              headers={'User-Agent': 'CBC-Realistic-Ballistics-GitHub-Actions/1.0'}
+          )
+          with urllib.request.urlopen(req) as response:
+              version = json.load(response)
+
+          files = version.get('files') or []
+          selected = next(
+              (f for f in files if f.get('filename') == 'createbigcannons-5.11.7+mc.1.21.1.jar'),
+              next((f for f in files if f.get('primary')), files[0] if files else None)
+          )
+          if selected is None:
+              raise SystemExit('Create Big Cannons 5.11.7 file not found')
+
+          print('CBC:', selected['url'])
+          urllib.request.urlretrieve(
+              selected['url'],
+              '../_deps_CreateBigCannons/createbigcannons-5.11.7+mc.1.21.1.jar'
+          )
+
+          ponder_url = (
+              'https://maven.createmod.net/net/createmod/ponder/ponder-neoforge/'
+              '1.0.82+mc1.21.1/ponder-neoforge-1.0.82+mc1.21.1.jar'
+          )
+          print('Ponder:', ponder_url)
+          urllib.request.urlretrieve(
+              ponder_url,
+              '../_deps_CreateBigCannons/ponder-neoforge-1.0.82+mc1.21.1.jar'
+          )
+          PY
+
+      - name: Build mod
+        shell: bash
+        run: |
+          set -o pipefail
+          chmod +x gradlew
+          {
+            java -version
+            ./gradlew --version
+            ./gradlew --no-daemon clean build
+          } 2>&1 | tee build-action.log
+
+      - name: Verify JAR
+        shell: bash
+        run: |
+          set -euo pipefail
+          JAR='build/libs/cbc-realistic-ballistics-1.3.3.jar'
+          test -f "$JAR"
+          jar tf "$JAR" | grep -q 'ua/ivan/cbcrealisticballistics/ProjectileChunkLoader.class'
+          jar tf "$JAR" | grep -q 'ua/ivan/cbcrealisticballistics/mixin/AbstractCannonProjectileMixin.class'
+          jar tf "$JAR" | grep -q 'META-INF/neoforge.mods.toml'
+          echo 'JAR verification passed.' | tee -a build-action.log
+
+      - name: Commit built JAR and log
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f build/libs/cbc-realistic-ballistics-1.3.3.jar build-action.log
+          if git diff --cached --quiet; then
+            echo 'Build output already up to date.'
+            exit 0
+          fi
+          git commit -m 'Build CBC Realistic Ballistics 1.3.3'
+          git push
+
+      - name: Commit failed build log
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f build-action.log
+          git commit -m 'Record CBC Realistic Ballistics build failure' || exit 0
+          git push
