@@ -1,0 +1,121 @@
+openjdk version "21.0.12" 2026-07-21 LTS
+OpenJDK Runtime Environment Temurin-21.0.12+8 (build 21.0.12+8-LTS)
+OpenJDK 64-Bit Server VM Temurin-21.0.12+8 (build 21.0.12+8-LTS, mixed mode, sharing)
+Downloading https://mirrors.cloud.tencent.com/gradle/gradle-8.14.2-bin.zip
+.............10%.............20%.............30%.............40%.............50%.............60%.............70%.............80%.............90%..............100%
+
+Welcome to Gradle 8.14.2!
+
+Here are the highlights of this release:
+ - Java 24 support
+ - GraalVM Native Image toolchain selection
+ - Enhancements to test reporting
+ - Build Authoring improvements
+
+For more details see https://docs.gradle.org/8.14.2/release-notes.html
+
+
+------------------------------------------------------------
+Gradle 8.14.2
+------------------------------------------------------------
+
+Build time:    2025-06-05 13:32:01 UTC
+Revision:      30db2a3bdfffa9f8b40e798095675f9dab990a9a
+
+Kotlin:        2.0.21
+Groovy:        3.0.24
+Ant:           Apache Ant(TM) version 1.10.15 compiled on August 25 2024
+Launcher JVM:  21.0.12 (Eclipse Adoptium 21.0.12+8-LTS)
+Daemon JVM:    /usr/lib/jvm/temurin-21-jdk-amd64 (no JDK specified, using current Java home)
+OS:            Linux 6.17.0-1022-azure amd64
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :clean
+
+> Task :createMinecraftArtifacts
+Loaded 111 artifacts from /home/runner/work/CBC-Realistic-Ballistics/CBC-Realistic-Ballistics/build/tmp/createMinecraftArtifacts/nfrt_artifact_manifest.properties
+[1m*** Started working on [4mdownloadJson[0m[0m
+  ↓ https://launchermeta.mojang.com/mc/game/version_manifest_v2.json
+  ↓ https://piston-meta.mojang.com/v1/packages/9d4b0811c18ea0e0968693b971233c49d89b9ced/1.21.1.json
+ [1m[92m✓[0m Completed [4mdownloadJson[0m in 0.46s
+[1m*** Started working on [4mdownloadServer[0m[0m
+[1m*** Started working on [4mlistLibraries[0m[0m
+[1m*** Started working on [4mdownloadClientMappings[0m[0m
+[1m*** Started working on [4mdownloadClient[0m[0m
+  ↓ https://piston-data.mojang.com/v1/objects/2244b6f072256667bcd9a73df124d6c58de77992/client.txt
+  ↓ https://piston-data.mojang.com/v1/objects/59353fb40c36d304f2035d51e7d6e6baa98dc05c/server.jar
+  ↓ https://piston-data.mojang.com/v1/objects/30c73b1c5da787909b2f73340419fdf13b9def88/client.jar
+ [1m[92m✓[0m Completed [4mlistLibraries[0m in 0.03s
+ [1m[92m✓[0m Completed [4mdownloadClientMappings[0m in 0.45s
+[1m*** Started working on [4mmergeMappings[0m[0m
+ ↳ Running external tool net.neoforged.installertools:installertools:2.1.2:fatjar
+ [1m[92m✓[0m Completed [4mdownloadClient[0m in 0.92s
+[1m*** Started working on [4mstripClient[0m[0m
+ [1m[92m✓[0m Completed [4mdownloadServer[0m in 1.28s
+[1m*** Started working on [4mextractServer[0m[0m
+ ↳ Running external tool net.neoforged.installertools:installertools:2.1.2:fatjar
+ [1m[92m✓[0m Completed [4mextractServer[0m in 0.72s
+[1m*** Started working on [4mstripServer[0m[0m
+ [1m[92m✓[0m Completed [4mmergeMappings[0m in 3.77s
+ [1m[92m✓[0m Completed [4mstripServer[0m in 2.48s
+ [1m[92m✓[0m Completed [4mstripClient[0m in 4.00s
+[1m*** Started working on [4mmerge[0m[0m
+ ↳ Running external tool net.neoforged:mergetool:2.0.3:fatjar
+ [1m[92m✓[0m Completed [4mmerge[0m in 3.24s
+[1m*** Started working on [4mrename[0m[0m
+ ↳ Running external tool net.neoforged:AutoRenamingTool:2.0.3:all
+ [1m[92m✓[0m Completed [4mrename[0m in 5.35s
+[1m*** Started working on [4mdecompile[0m[0m
+ ↳ Running external tool org.vineflower:vineflower:1.10.1
+ [1m[92m✓[0m Completed [4mdecompile[0m in 59.68s
+[1m*** Started working on [4minject[0m[0m
+ [1m[92m✓[0m Completed [4minject[0m in 2.73s
+[1m*** Started working on [4mpatch[0m[0m
+ ↳ Running external tool io.codechicken:DiffPatch:2.0.0.36:all
+ [1m[92m✓[0m Completed [4mpatch[0m in 2.84s
+[1m*** Started working on [4mapplyNeoforgePatches[0m[0m
+ ↳ Running external tool io.codechicken:DiffPatch:2.0.0.36:all
+ [1m[92m✓[0m Completed [4mapplyNeoforgePatches[0m in 2.16s
+[1m*** Started working on [4mtransformSources[0m[0m
+ ↳ Running external tool net.neoforged.jst:jst-cli-bundle:1.0.66
+ [1m[92m✓[0m Completed [4mtransformSources[0m in 7.96s
+[1m*** Started working on [4mrecompile[0m[0m
+ 109 items on the compile classpath
+ 0 items on the sourcepath
+[1m*** Started working on [4msourcesWithNeoForge[0m[0m
+ Compiling 5364 source files
+ [1m[92m✓[0m Completed [4msourcesWithNeoForge[0m in 5.22s
+Copied 0 resource files
+ [1m[92m✓[0m Completed [4mrecompile[0m in 35.15s
+[1m*** Started working on [4mcompiledWithNeoForge[0m[0m
+ [1m[92m✓[0m Completed [4mcompiledWithNeoForge[0m in 6.88s
+[1m*** Started working on [4msourcesAndCompiledWithNeoForge[0m[0m
+ [1m[92m✓[0m Completed [4msourcesAndCompiledWithNeoForge[0m in 2.67s
+Total runtime: 135.02s
+
+
+> Task :compileJava
+> Task :processResources
+> Task :classes
+> Task :jarJar NO-SOURCE
+> Task :jar
+> Task :assemble
+> Task :compileTestJava NO-SOURCE
+> Task :processTestResources NO-SOURCE
+> Task :testClasses UP-TO-DATE
+> Task :test NO-SOURCE
+> Task :check UP-TO-DATE
+> Task :build
+
+[Incubating] Problems report is available at: file:///home/runner/work/CBC-Realistic-Ballistics/CBC-Realistic-Ballistics/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.2/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 3m 4s
+5 actionable tasks: 5 executed
+JAR verification passed.
