@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "ua.ivan.cbcrealisticballistics.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "AbstractCannonProjectileMixin",
+    "AutocannonImpactMixin",
+    "BigCannonImpactMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
