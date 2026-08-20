@@ -69,7 +69,10 @@ jobs:
           test -n "$COMPANION"
           (cd ../_deps_sable && jar xf ../_deps_sable_2_0_5/sable-neoforge-1.21.1-2.0.5.jar "$COMPANION")
           mkdir -p ../_deps_sable/META-INF/jarjar
-          cp "../_deps_sable/$COMPANION" ../_deps_sable/META-INF/jarjar/sable-companion-common-1.21.1-1.6.0.jar
+          if [ "$COMPANION" != 'META-INF/jarjar/sable-companion-common-1.21.1-1.6.0.jar' ]; then
+            cp "../_deps_sable/$COMPANION" ../_deps_sable/META-INF/jarjar/sable-companion-common-1.21.1-1.6.0.jar
+          fi
+          test -f ../_deps_sable/META-INF/jarjar/sable-companion-common-1.21.1-1.6.0.jar
 
       - name: Apply requested patch
         run: python3 .github/apply_high_altitude_virtual_flight.py
