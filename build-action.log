@@ -38,61 +38,61 @@ Loaded 111 artifacts from /home/runner/work/CBC-Realistic-Ballistics/CBC-Realist
 [1m*** Started working on [4mdownloadJson[0m[0m
   ↓ https://launchermeta.mojang.com/mc/game/version_manifest_v2.json
   ↓ https://piston-meta.mojang.com/v1/packages/9d4b0811c18ea0e0968693b971233c49d89b9ced/1.21.1.json
- [1m[92m✓[0m Completed [4mdownloadJson[0m in 0.46s
+ [1m[92m✓[0m Completed [4mdownloadJson[0m in 0.63s
 [1m*** Started working on [4mdownloadServer[0m[0m
+[1m*** Started working on [4mdownloadClient[0m[0m
 [1m*** Started working on [4mlistLibraries[0m[0m
 [1m*** Started working on [4mdownloadClientMappings[0m[0m
-[1m*** Started working on [4mdownloadClient[0m[0m
-  ↓ https://piston-data.mojang.com/v1/objects/2244b6f072256667bcd9a73df124d6c58de77992/client.txt
   ↓ https://piston-data.mojang.com/v1/objects/59353fb40c36d304f2035d51e7d6e6baa98dc05c/server.jar
+  ↓ https://piston-data.mojang.com/v1/objects/2244b6f072256667bcd9a73df124d6c58de77992/client.txt
   ↓ https://piston-data.mojang.com/v1/objects/30c73b1c5da787909b2f73340419fdf13b9def88/client.jar
  [1m[92m✓[0m Completed [4mlistLibraries[0m in 0.03s
- [1m[92m✓[0m Completed [4mdownloadClientMappings[0m in 0.45s
+ [1m[92m✓[0m Completed [4mdownloadClientMappings[0m in 0.53s
 [1m*** Started working on [4mmergeMappings[0m[0m
  ↳ Running external tool net.neoforged.installertools:installertools:2.1.2:fatjar
- [1m[92m✓[0m Completed [4mdownloadClient[0m in 0.92s
+ [1m[92m✓[0m Completed [4mdownloadClient[0m in 0.99s
 [1m*** Started working on [4mstripClient[0m[0m
- [1m[92m✓[0m Completed [4mdownloadServer[0m in 1.28s
+ [1m[92m✓[0m Completed [4mdownloadServer[0m in 1.62s
 [1m*** Started working on [4mextractServer[0m[0m
  ↳ Running external tool net.neoforged.installertools:installertools:2.1.2:fatjar
- [1m[92m✓[0m Completed [4mextractServer[0m in 0.72s
+ [1m[92m✓[0m Completed [4mextractServer[0m in 0.80s
 [1m*** Started working on [4mstripServer[0m[0m
- [1m[92m✓[0m Completed [4mmergeMappings[0m in 3.77s
- [1m[92m✓[0m Completed [4mstripServer[0m in 2.48s
- [1m[92m✓[0m Completed [4mstripClient[0m in 4.00s
+ [1m[92m✓[0m Completed [4mmergeMappings[0m in 4.27s
+ [1m[92m✓[0m Completed [4mstripServer[0m in 2.35s
+ [1m[92m✓[0m Completed [4mstripClient[0m in 4.23s
 [1m*** Started working on [4mmerge[0m[0m
  ↳ Running external tool net.neoforged:mergetool:2.0.3:fatjar
- [1m[92m✓[0m Completed [4mmerge[0m in 3.24s
+ [1m[92m✓[0m Completed [4mmerge[0m in 3.42s
 [1m*** Started working on [4mrename[0m[0m
  ↳ Running external tool net.neoforged:AutoRenamingTool:2.0.3:all
- [1m[92m✓[0m Completed [4mrename[0m in 5.35s
+ [1m[92m✓[0m Completed [4mrename[0m in 5.85s
 [1m*** Started working on [4mdecompile[0m[0m
  ↳ Running external tool org.vineflower:vineflower:1.10.1
- [1m[92m✓[0m Completed [4mdecompile[0m in 59.68s
+ [1m[92m✓[0m Completed [4mdecompile[0m in 62.61s
 [1m*** Started working on [4minject[0m[0m
- [1m[92m✓[0m Completed [4minject[0m in 2.73s
+ [1m[92m✓[0m Completed [4minject[0m in 3.04s
 [1m*** Started working on [4mpatch[0m[0m
  ↳ Running external tool io.codechicken:DiffPatch:2.0.0.36:all
- [1m[92m✓[0m Completed [4mpatch[0m in 2.84s
+ [1m[92m✓[0m Completed [4mpatch[0m in 2.64s
 [1m*** Started working on [4mapplyNeoforgePatches[0m[0m
  ↳ Running external tool io.codechicken:DiffPatch:2.0.0.36:all
- [1m[92m✓[0m Completed [4mapplyNeoforgePatches[0m in 2.16s
+ [1m[92m✓[0m Completed [4mapplyNeoforgePatches[0m in 2.13s
 [1m*** Started working on [4mtransformSources[0m[0m
  ↳ Running external tool net.neoforged.jst:jst-cli-bundle:1.0.66
- [1m[92m✓[0m Completed [4mtransformSources[0m in 7.96s
+ [1m[92m✓[0m Completed [4mtransformSources[0m in 8.45s
 [1m*** Started working on [4mrecompile[0m[0m
  109 items on the compile classpath
  0 items on the sourcepath
 [1m*** Started working on [4msourcesWithNeoForge[0m[0m
  Compiling 5364 source files
- [1m[92m✓[0m Completed [4msourcesWithNeoForge[0m in 5.22s
+ [1m[92m✓[0m Completed [4msourcesWithNeoForge[0m in 4.52s
 Copied 0 resource files
- [1m[92m✓[0m Completed [4mrecompile[0m in 35.15s
+ [1m[92m✓[0m Completed [4mrecompile[0m in 39.23s
 [1m*** Started working on [4mcompiledWithNeoForge[0m[0m
- [1m[92m✓[0m Completed [4mcompiledWithNeoForge[0m in 6.88s
+ [1m[92m✓[0m Completed [4mcompiledWithNeoForge[0m in 7.35s
 [1m*** Started working on [4msourcesAndCompiledWithNeoForge[0m[0m
- [1m[92m✓[0m Completed [4msourcesAndCompiledWithNeoForge[0m in 2.67s
-Total runtime: 135.02s
+ [1m[92m✓[0m Completed [4msourcesAndCompiledWithNeoForge[0m in 2.70s
+Total runtime: 144.47s
 
 
 > Task :compileJava
@@ -116,6 +116,6 @@ You can use '--warning-mode all' to show the individual deprecation warnings and
 
 For more on this, please refer to https://docs.gradle.org/8.14.2/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
 
-BUILD SUCCESSFUL in 3m 4s
+BUILD SUCCESSFUL in 3m 29s
 5 actionable tasks: 5 executed
 JAR verification passed.
