@@ -1,0 +1,33 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.cbcrealisticballistics.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "AddonProjectileExpiryMixin",
+    "AbstractCannonProjectileMixin",
+    "AbstractAutocannonProjectileMixin",
+    "AbstractBigCannonProjectileMixin",
+    "AutocannonImpactMixin",
+    "BigCannonImpactMixin",
+    "CbcAtMountedRocketLauncherMixin",
+    "ClipContextMixin",
+    "EntityMixin",
+    "FuzedBigCannonProjectileMixin",
+    "HEShellProjectileMixin",
+    "HBombProjectileMixin",
+    "LevelMixin",
+    "MountedDualCannonContraptionMixin",
+    "NukeShellProjectileMixin",
+    "NuclearExplosionNoDropsMixin",
+    "ProjectileMixin",
+    "ShellessInertBigCannonProjectileMixin"
+  ],
+  "client": [
+    "ClientExtensionsManagerMixin",
+    "MushroomCloudEffectMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

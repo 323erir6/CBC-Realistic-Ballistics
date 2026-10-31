@@ -4,13 +4,15 @@ license="MIT"
 
 [[mods]]
 modId="cbc_realistic_ballistics"
-version="1.3.2"
+version="1.9.22"
 displayName="CBC Realistic Ballistics"
-authors="Ivan"
 description='''Adds physically inspired trajectories to Create: Big Cannons projectiles without changing their damage, mass, explosion power or penetration properties.'''
 
 [[mixins]]
 config="cbc_realistic_ballistics.mixins.json"
+
+[[mixins]]
+config="cbc_realistic_ballistics.sable_recovery.mixins.json"
 
 [[dependencies.cbc_realistic_ballistics]]
 modId="neoforge"
@@ -37,5 +39,12 @@ side="BOTH"
 modId="createbigcannons"
 type="required"
 versionRange="[5.11.7,5.12)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.cbc_realistic_ballistics]]
+modId="cbc_enhanced_shells"
+type="optional"
+versionRange="[1.5.1,2)"
 ordering="AFTER"
 side="BOTH"
