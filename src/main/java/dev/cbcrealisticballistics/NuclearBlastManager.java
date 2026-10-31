@@ -9,6 +9,7 @@ import dev.ryanhcode.sable.sublevel.ServerSubLevel;
 import dev.ryanhcode.sable.sublevel.SubLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
@@ -24,8 +25,11 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * Replaces hundreds of ring TNT explosions with one deterministic, budgeted
@@ -39,39 +43,24 @@ public final class NuclearBlastManager {
     private static final int MAX_INSPECTIONS_PER_TICK = 8000;
     private static final int WINDOW_CHUNK_PROBES_PER_TICK = 64;
     private static final long MAX_WORK_NANOS_PER_TICK = 3_000_000L;
-    private static final float CRATER_ENTITY_DAMAGE = 15_000.0f;
+    private static final double BLOCK_HALF_DIAGONAL = Math.sqrt(0.5);
     private static final List<Job> JOBS = new ArrayList<>();
+    private static final List<DamageWave> DAMAGE_WAVES = new ArrayList<>();
 
     private NuclearBlastManager() {
     }
 
     public static void start(ServerLevel level, double x, double y, double z, int profileOrdinal) {
         NuclearBlastProfile profile = NuclearBlastProfile.byOrdinal(profileOrdinal);
-        damageLivingEntities(level, x, y, z, profile.craterRadius());
+        DAMAGE_WAVES.add(new DamageWave(
+                level, x, y, z, profileOrdinal, profile.craterRadius(), level.getGameTime()));
         NuclearBlastHistory.BlastRecord historyRecord = NuclearBlastHistory.record(
                 level, x, y, z, profileOrdinal);
         JOBS.add(new Job(level, x, y, z, profile, historyRecord));
     }
 
-    private static void damageLivingEntities(
-            ServerLevel level, double x, double y, double z, double radius
-    ) {
-        double radiusSquared = radius * radius;
-        AABB bounds = new AABB(
-                x - radius, y - radius, z - radius,
-                x + radius, y + radius, z + radius
-        );
-        for (LivingEntity entity : level.getEntitiesOfClass(
-                LivingEntity.class,
-                bounds,
-                candidate -> candidate.isAlive()
-                        && candidate.distanceToSqr(x, y, z) <= radiusSquared
-        )) {
-            entity.hurt(level.damageSources().genericKill(), CRATER_ENTITY_DAMAGE);
-        }
-    }
-
     public static void onServerTickPost(ServerTickEvent.Post event) {
+        processDamageWaves();
         if (JOBS.isEmpty()) return;
         Budget budget = new Budget(MAX_CHANGES_PER_TICK, MAX_INSPECTIONS_PER_TICK);
         Iterator<Job> iterator = JOBS.iterator();
@@ -87,6 +76,15 @@ public final class NuclearBlastManager {
     public static void clearRuntimeState() {
         for (Job job : JOBS) job.releaseTerrainTicket();
         JOBS.clear();
+        DAMAGE_WAVES.clear();
+    }
+
+    private static void processDamageWaves() {
+        Iterator<DamageWave> iterator = DAMAGE_WAVES.iterator();
+        while (iterator.hasNext()) {
+            DamageWave wave = iterator.next();
+            if (!wave.level.getServer().isRunning() || wave.tick()) iterator.remove();
+        }
     }
 
     private static boolean removeWithoutDrops(ServerLevel level, BlockPos pos, BlockState state) {
@@ -215,15 +213,18 @@ public final class NuclearBlastManager {
             if (topY <= level.getMinBuildHeight()) return;
             BlockPos top = new BlockPos(bx, topY, bz);
 
-            if (craterEnabled && distance <= profile.craterRadius()) {
+            double craterDistance = Math.max(0.0, distance - BLOCK_HALF_DIAGONAL);
+            if (craterEnabled && craterDistance <= profile.craterRadius()) {
                 // The floor is absolute. Basing it on topY copied buildings and
                 // trees into the bottom of the crater as raised silhouettes.
                 int floorY = Math.max(
                         level.getMinBuildHeight(),
-                        profile.craterFloorY(groundY, distance)
+                        profile.craterFloorY(groundY, craterDistance)
                 );
                 BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(bx, topY, bz);
-                for (int by = topY; by > floorY && budget.canInspect(); --by) {
+                // A started column is always completed. At most one world-height
+                // column can exceed the tick budget, avoiding permanent remnants.
+                for (int by = topY; by > floorY; --by) {
                     pos.setY(by);
                     budget.inspect();
                     BlockState state = level.getBlockState(pos);
@@ -232,22 +233,33 @@ public final class NuclearBlastManager {
                 return;
             }
 
-            if (!ClaimProtectionHelper.canModifyBlock(level, top)) return;
-
-            if (craterEnabled) {
+            if (craterEnabled
+                    && distance <= profile.outerTerrainRadius() + BLOCK_HALF_DIAGONAL) {
                 int rim = profile.rimLayers(distance);
-                if (rim > 0) {
-                    BlockState fill = rimMaterial(level.getBlockState(top));
-                    BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(bx, topY + 1, bz);
-                    for (int layer = 0; layer < rim && budget.canInspect(); ++layer) {
-                        pos.setY(topY + 1 + layer);
-                        budget.inspect();
-                        if (!level.getBlockState(pos).isAir()) break;
-                        if (level.setBlock(pos, fill, REMOVE_FLAGS)) budget.change();
-                    }
-                    return;
+                int rimBaseY = Math.min(topY, groundY);
+                BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(bx, rimBaseY, bz);
+                BlockState originalBase = level.getBlockState(pos);
+                BlockState fill = rimMaterial(originalBase);
+                for (int by = topY; by >= rimBaseY; --by) {
+                    pos.setY(by);
+                    budget.inspect();
+                    BlockState state = level.getBlockState(pos);
+                    if (removeWithoutDrops(level, pos, state)) budget.change();
                 }
+                pos.setY(rimBaseY);
+                budget.inspect();
+                if (level.getBlockState(pos).isAir()
+                        && level.setBlock(pos, fill, REMOVE_FLAGS)) budget.change();
+                for (int layer = 0; layer < rim; ++layer) {
+                    pos.setY(rimBaseY + 1 + layer);
+                    budget.inspect();
+                    if (!level.getBlockState(pos).isAir()) break;
+                    if (level.setBlock(pos, fill, REMOVE_FLAGS)) budget.change();
+                }
+                return;
             }
+
+            if (!ClaimProtectionHelper.canModifyBlock(level, top)) return;
             if (distance <= scorchRadius) scorchSurface(top, budget);
         }
 
@@ -410,6 +422,75 @@ public final class NuclearBlastManager {
                 if (destroy && removeWithoutDrops(job.level, localPos, state)) budget.change();
             }
             return index < bounds.volume();
+        }
+    }
+
+    private static final class DamageWave {
+        final ServerLevel level;
+        final double x;
+        final double y;
+        final double z;
+        final int profileOrdinal;
+        final double maximumRadius;
+        final long startedGameTime;
+        final Set<UUID> hitEntities = new HashSet<>();
+        double previousRadius = -1.0;
+
+        DamageWave(
+                ServerLevel level,
+                double x,
+                double y,
+                double z,
+                int profileOrdinal,
+                double maximumRadius,
+                long startedGameTime
+        ) {
+            this.level = level;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.profileOrdinal = profileOrdinal;
+            this.maximumRadius = maximumRadius;
+            this.startedGameTime = startedGameTime;
+        }
+
+        boolean tick() {
+            long elapsed = level.getGameTime() - startedGameTime;
+            double radius = NuclearDamageWaveMath.radius(
+                    profileOrdinal, elapsed, maximumRadius);
+            if (radius < 0.0) return false;
+
+            double radiusSquared = radius * radius;
+            double previousSquared = previousRadius < 0.0
+                    ? -1.0
+                    : previousRadius * previousRadius;
+            AABB bounds = new AABB(
+                    x - radius, y - radius, z - radius,
+                    x + radius, y + radius, z + radius
+            );
+            for (LivingEntity entity : level.getEntitiesOfClass(
+                    LivingEntity.class,
+                    bounds,
+                    candidate -> isDamageable(candidate)
+                            && !hitEntities.contains(candidate.getUUID())
+            )) {
+                double distanceSquared = entity.distanceToSqr(x, y, z);
+                if (distanceSquared < previousSquared || distanceSquared > radiusSquared) continue;
+                double distance = Math.sqrt(distanceSquared);
+                float damage = NuclearDamageWaveMath.damage(distance, maximumRadius);
+                if (damage > 0.0f) {
+                    entity.hurt(level.damageSources().genericKill(), damage);
+                    hitEntities.add(entity.getUUID());
+                }
+            }
+            previousRadius = radius;
+            return radius >= maximumRadius;
+        }
+
+        private static boolean isDamageable(LivingEntity entity) {
+            if (!entity.isAlive()) return false;
+            return !(entity instanceof ServerPlayer player)
+                    || (!player.isCreative() && !player.isSpectator());
         }
     }
 

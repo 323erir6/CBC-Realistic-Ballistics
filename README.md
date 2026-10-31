@@ -1,5 +1,13 @@
 # CBC Realistic Ballistics
 
+## 1.9.26 - clean crater rim and travelling damage wave
+
+- Blocks whose footprint intersects the crater edge are cleared instead of surviving between circular columns.
+- Existing structures are removed from the complete raised-rim area before ejecta material is placed.
+- Nuclear damage now travels with the original shockwave timing instead of applying everywhere instantly.
+- Damage falls quadratically from 15,000 at ground zero to zero at the crater radius.
+- Creative and spectator players are excluded from nuclear wave damage.
+
 ## 1.9.25 - clean crater volume and lethal core
 
 - Crater floors now use an absolute blast profile instead of inheriting the height of destroyed surface structures.
