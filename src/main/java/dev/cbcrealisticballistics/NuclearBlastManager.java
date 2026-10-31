@@ -9,6 +9,7 @@ import dev.ryanhcode.sable.sublevel.ServerSubLevel;
 import dev.ryanhcode.sable.sublevel.SubLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -17,6 +18,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.AABB;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
@@ -37,6 +39,7 @@ public final class NuclearBlastManager {
     private static final int MAX_INSPECTIONS_PER_TICK = 8000;
     private static final int WINDOW_CHUNK_PROBES_PER_TICK = 64;
     private static final long MAX_WORK_NANOS_PER_TICK = 3_000_000L;
+    private static final float CRATER_ENTITY_DAMAGE = 15_000.0f;
     private static final List<Job> JOBS = new ArrayList<>();
 
     private NuclearBlastManager() {
@@ -44,9 +47,28 @@ public final class NuclearBlastManager {
 
     public static void start(ServerLevel level, double x, double y, double z, int profileOrdinal) {
         NuclearBlastProfile profile = NuclearBlastProfile.byOrdinal(profileOrdinal);
+        damageLivingEntities(level, x, y, z, profile.craterRadius());
         NuclearBlastHistory.BlastRecord historyRecord = NuclearBlastHistory.record(
                 level, x, y, z, profileOrdinal);
         JOBS.add(new Job(level, x, y, z, profile, historyRecord));
+    }
+
+    private static void damageLivingEntities(
+            ServerLevel level, double x, double y, double z, double radius
+    ) {
+        double radiusSquared = radius * radius;
+        AABB bounds = new AABB(
+                x - radius, y - radius, z - radius,
+                x + radius, y + radius, z + radius
+        );
+        for (LivingEntity entity : level.getEntitiesOfClass(
+                LivingEntity.class,
+                bounds,
+                candidate -> candidate.isAlive()
+                        && candidate.distanceToSqr(x, y, z) <= radiusSquared
+        )) {
+            entity.hurt(level.damageSources().genericKill(), CRATER_ENTITY_DAMAGE);
+        }
     }
 
     public static void onServerTickPost(ServerTickEvent.Post event) {
@@ -68,7 +90,7 @@ public final class NuclearBlastManager {
     }
 
     private static boolean removeWithoutDrops(ServerLevel level, BlockPos pos, BlockState state) {
-        if (state.isAir() || state.getDestroySpeed(level, pos) < 0.0f) return false;
+        if (state.isAir() || state.is(Blocks.BEDROCK)) return false;
         return level.setBlock(pos, Blocks.AIR.defaultBlockState(), REMOVE_FLAGS);
     }
 
@@ -187,14 +209,19 @@ public final class NuclearBlastManager {
             double dz = bz + 0.5 - z;
             double distance = Math.sqrt(dx * dx + dz * dz);
             if (distance > terrainRadius) return;
-            int topY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, bx, bz) - 1;
+            // WORLD_SURFACE starts above every non-air block, including leaves,
+            // flowers, ladders and fluids which the motion-blocking map ignores.
+            int topY = level.getHeight(Heightmap.Types.WORLD_SURFACE, bx, bz) - 1;
             if (topY <= level.getMinBuildHeight()) return;
             BlockPos top = new BlockPos(bx, topY, bz);
-            if (!ClaimProtectionHelper.canModifyBlock(level, top)) return;
 
             if (craterEnabled && distance <= profile.craterRadius()) {
-                int depth = groundY - profile.craterFloorY(groundY, distance);
-                int floorY = Math.max(level.getMinBuildHeight(), topY - depth);
+                // The floor is absolute. Basing it on topY copied buildings and
+                // trees into the bottom of the crater as raised silhouettes.
+                int floorY = Math.max(
+                        level.getMinBuildHeight(),
+                        profile.craterFloorY(groundY, distance)
+                );
                 BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(bx, topY, bz);
                 for (int by = topY; by > floorY && budget.canInspect(); --by) {
                     pos.setY(by);
@@ -204,6 +231,8 @@ public final class NuclearBlastManager {
                 }
                 return;
             }
+
+            if (!ClaimProtectionHelper.canModifyBlock(level, top)) return;
 
             if (craterEnabled) {
                 int rim = profile.rimLayers(distance);

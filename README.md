@@ -1,5 +1,13 @@
 # CBC Realistic Ballistics
 
+## 1.9.25 - clean crater volume and lethal core
+
+- Crater floors now use an absolute blast profile instead of inheriting the height of destroyed surface structures.
+- Crater columns start at the highest non-air block, removing leaves, flowers, ladders, fluids and other non-solid remnants.
+- Every encountered block in the excavated crater volume is removed without drops except bedrock.
+- Living entities inside the spherical crater radius receive 15,000 immediate damage.
+- Projectile flight remains unchanged.
+
 ## 1.9.24 - H-bomb crater and explosion-load fix
 
 - Mini H-bomb and H-bomb delayed TNT rings are replaced reliably by the continuous crater model.
