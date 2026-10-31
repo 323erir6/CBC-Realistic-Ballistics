@@ -19,6 +19,7 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -64,7 +65,10 @@ public final class NuclearAftermathManager {
     ) {
         long processed = PROCESSED_THROUGH.getOrDefault(chunk, 0L);
         if (record.sequence() <= processed || !record.intersects(chunk.getPos())) return;
-        enqueue(level, chunk, List.of(record), record.sequence());
+        NuclearBlastHistory.Query query = NuclearBlastHistory.get(level).query(chunk.getPos(), processed);
+        if (!query.records().isEmpty()) {
+            enqueue(level, chunk, query.records(), query.processedThrough());
+        }
     }
 
     private static void enqueue(
@@ -109,6 +113,7 @@ public final class NuclearAftermathManager {
         int sectionBlockIndex;
         int blockEntityIndex;
         int columnIndex;
+        final double[] attenuationByColumn = new double[256];
         Phase phase = Phase.GLASS;
 
         ChunkJob(
@@ -123,6 +128,7 @@ public final class NuclearAftermathManager {
             this.records = List.copyOf(records);
             this.processedThrough = processedThrough;
             this.blockEntities = new ArrayList<>(chunk.getBlockEntities().values());
+            Arrays.fill(attenuationByColumn, Double.NaN);
         }
 
         boolean process(Budget budget) {
@@ -250,11 +256,16 @@ public final class NuclearAftermathManager {
                 NuclearBlastHistory.BlastRecord blast, BlockPos pos, int lx, int lz
         ) {
             double distanceSquared = distanceSquared(blast, pos);
-            double structuralRadius = blast.glassRadius() * 0.45;
-            double minimum = (double) blast.craterRadius() * blast.craterRadius();
-            double inverseSquare = structuralRadius * structuralRadius
-                    / Math.max(minimum, distanceSquared);
-            return inverseSquare * turnAttenuation(blast, pos.getY(), lx, lz);
+            double inverseSquare = inverseSquareEnergy(blast, distanceSquared);
+            int column = (lz & 15) << 4 | lx & 15;
+            double attenuation = attenuationByColumn[column];
+            if (Double.isNaN(attenuation)) {
+                int surfaceY = chunk.getHeight(
+                        Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, lx & 15, lz & 15) - 1;
+                attenuation = turnAttenuation(blast, surfaceY, lx & 15, lz & 15);
+                attenuationByColumn[column] = attenuation;
+            }
+            return inverseSquare * attenuation;
         }
 
         private double turnAttenuation(
@@ -281,7 +292,7 @@ public final class NuclearAftermathManager {
                 previousAngle = requiredAngle;
             }
             // Besides inverse-square decay, every bend consumes wave energy.
-            return Math.exp(-1.15 * turnCost) * Math.pow(0.78, bends);
+            return bendAttenuation(turnCost, bends);
         }
 
         private double distanceSquared(NuclearBlastHistory.BlastRecord blast, BlockPos pos) {
@@ -302,6 +313,7 @@ public final class NuclearAftermathManager {
             sectionBlockIndex = 0;
             blockEntityIndex = 0;
             columnIndex = 0;
+            Arrays.fill(attenuationByColumn, Double.NaN);
             phase = Phase.GLASS;
         }
     }
@@ -309,11 +321,25 @@ public final class NuclearAftermathManager {
     private static boolean isLikelyTerrain(BlockState state) {
         String path = net.minecraft.core.registries.BuiltInRegistries.BLOCK
                 .getKey(state.getBlock()).getPath();
-        return path.contains("dirt") || path.contains("grass") || path.contains("stone")
-                || path.contains("sand") || path.contains("gravel") || path.contains("ore")
-                || path.contains("snow") || path.contains("ice") || path.contains("clay")
-                || path.contains("terracotta") || path.contains("netherrack")
-                || path.contains("deepslate");
+        return path.equals("dirt") || path.equals("grass_block") || path.equals("stone")
+                || path.equals("deepslate") || path.equals("netherrack")
+                || path.equals("end_stone") || path.equals("gravel") || path.equals("clay")
+                || path.equals("snow_block") || path.equals("ice")
+                || path.endsWith("_sand") || path.equals("sand")
+                || path.endsWith("_ore") || path.endsWith("terracotta");
+    }
+
+    static double inverseSquareEnergy(
+            NuclearBlastHistory.BlastRecord blast, double distanceSquared
+    ) {
+        double structuralRadius = blast.glassRadius() * 0.45;
+        double minimum = (double) blast.craterRadius() * blast.craterRadius();
+        return structuralRadius * structuralRadius / Math.max(minimum, distanceSquared);
+    }
+
+    static double bendAttenuation(double turnCost, int bends) {
+        return Math.exp(-1.15 * Math.max(0.0, turnCost))
+                * Math.pow(0.78, Math.max(0, bends));
     }
 
     private static double deterministicUnit(long sequence, BlockPos pos) {

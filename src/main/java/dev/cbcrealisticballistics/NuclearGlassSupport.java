@@ -7,13 +7,12 @@ import net.minecraft.world.level.block.state.BlockState;
 
 import java.lang.reflect.Method;
 import java.util.Collection;
-import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 final class NuclearGlassSupport {
-    private static final Map<Block, Boolean> GLASS_BLOCKS = new IdentityHashMap<>();
+    private static final Map<Block, Boolean> GLASS_BLOCKS = new ConcurrentHashMap<>();
     private static final Map<Class<?>, Accessors> ACCESSORS = new ConcurrentHashMap<>();
 
     private NuclearGlassSupport() {
@@ -21,12 +20,10 @@ final class NuclearGlassSupport {
 
     static boolean isGlass(BlockState state) {
         if (state == null || state.isAir()) return false;
-        synchronized (GLASS_BLOCKS) {
-            return GLASS_BLOCKS.computeIfAbsent(state.getBlock(), block -> {
-                String path = BuiltInRegistries.BLOCK.getKey(block).getPath();
-                return path.contains("glass") || path.contains("stained_glass");
-            });
-        }
+        return GLASS_BLOCKS.computeIfAbsent(state.getBlock(), block -> {
+            String path = BuiltInRegistries.BLOCK.getKey(block).getPath();
+            return path.contains("glass") || path.contains("stained_glass");
+        });
     }
 
     static boolean isGlassFilled(BlockEntity blockEntity) {

@@ -1,5 +1,16 @@
 # CBC Realistic Ballistics
 
+## 1.9.23 - persistent nuclear aftermath
+
+- Nuclear detonations are saved per dimension with their type, centre, game time and physical radii.
+- Chunks apply missed glass and pressure-wave damage when they load naturally, without force-loading the blast area.
+- Each affected chunk stores one processed-history sequence instead of expanding the global save with chunk lists.
+- Pressure follows inverse-square decay and loses additional energy when local terrain forces the wave to turn.
+- Exposed structures receive deterministic partial damage based on pressure, shielding, hardness and blast resistance.
+- Vanilla glass, glass-filled Copycats and glass-filled FramedBlocks remain eligible for delayed shattering.
+- Delayed work is capped at 12,000 inspections and 700 block changes per server tick, with per-column shielding caches.
+- Nuclear terrain and aftermath removals suppress item drops.
+
 ## 1.9.19 - persistence and model consistency
 
 - Virtual projectiles in unloaded chunks are serialized into dimension SavedData and restored by UUID after a

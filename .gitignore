@@ -1,0 +1,12 @@
+.gradle/
+build/
+dist/
+run/
+out/
+*.log
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+.idea/
+.vscode/
+hs_err_pid*

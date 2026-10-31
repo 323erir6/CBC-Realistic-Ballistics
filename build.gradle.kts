@@ -76,8 +76,17 @@ val nuclearBlastProfileRegressionTest by tasks.registering(JavaExec::class) {
         languageVersion.set(JavaLanguageVersion.of(21))
     })
 }
+val nuclearAftermathGeometryRegressionTest by tasks.registering(JavaExec::class) {
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("dev.cbcrealisticballistics.NuclearAftermathGeometryTest")
+    javaLauncher.set(javaToolchains.launcherFor {
+        languageVersion.set(JavaLanguageVersion.of(21))
+    })
+}
 tasks.check {
     dependsOn(collisionRegressionTest)
     dependsOn(nuclearScorchRegressionTest)
     dependsOn(nuclearBlastProfileRegressionTest)
+    dependsOn(nuclearAftermathGeometryRegressionTest)
 }

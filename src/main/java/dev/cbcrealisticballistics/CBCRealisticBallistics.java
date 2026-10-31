@@ -45,6 +45,10 @@ public final class CBCRealisticBallistics {
         NeoForge.EVENT_BUS.addListener(NuclearVisualTracker::onServerTickPost);
         NeoForge.EVENT_BUS.addListener(NuclearScorchChunkSupport::onServerTickPost);
         NeoForge.EVENT_BUS.addListener(NuclearBlastManager::onServerTickPost);
+        NeoForge.EVENT_BUS.addListener(NuclearAftermathManager::onServerTickPost);
+        NeoForge.EVENT_BUS.addListener(NuclearAftermathManager::onChunkDataLoad);
+        NeoForge.EVENT_BUS.addListener(NuclearAftermathManager::onChunkDataSave);
+        NeoForge.EVENT_BUS.addListener(NuclearAftermathManager::onChunkLoad);
         NeoForge.EVENT_BUS.addListener(CBCRealisticBallistics::onEntityJoinLevel);
         NeoForge.EVENT_BUS.addListener(CBCRealisticBallistics::onEntityLeaveLevel);
         NeoForge.EVENT_BUS.addListener(HighAltitudeProjectileTransit::onLevelTickPost);
@@ -130,5 +134,6 @@ public final class CBCRealisticBallistics {
         NuclearVisualTracker.clearRuntimeState();
         NuclearScorchChunkSupport.clearRuntimeState();
         NuclearBlastManager.clearRuntimeState();
+        NuclearAftermathManager.clearRuntimeState();
     }
 }
