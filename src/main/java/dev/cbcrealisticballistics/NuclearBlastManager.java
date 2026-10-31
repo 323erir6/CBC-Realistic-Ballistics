@@ -33,9 +33,10 @@ public final class NuclearBlastManager {
     private static final int REMOVE_FLAGS = Block.UPDATE_CLIENTS
             | Block.UPDATE_KNOWN_SHAPE
             | Block.UPDATE_SUPPRESS_DROPS;
-    private static final int MAX_CHANGES_PER_TICK = 2400;
-    private static final int MAX_INSPECTIONS_PER_TICK = 18000;
-    private static final int WINDOW_CHUNK_PROBES_PER_TICK = 96;
+    private static final int MAX_CHANGES_PER_TICK = 900;
+    private static final int MAX_INSPECTIONS_PER_TICK = 8000;
+    private static final int WINDOW_CHUNK_PROBES_PER_TICK = 64;
+    private static final long MAX_WORK_NANOS_PER_TICK = 3_000_000L;
     private static final List<Job> JOBS = new ArrayList<>();
 
     private NuclearBlastManager() {
@@ -52,7 +53,7 @@ public final class NuclearBlastManager {
         if (JOBS.isEmpty()) return;
         Budget budget = new Budget(MAX_CHANGES_PER_TICK, MAX_INSPECTIONS_PER_TICK);
         Iterator<Job> iterator = JOBS.iterator();
-        while (iterator.hasNext() && budget.canInspect()) {
+        while (iterator.hasNext() && budget.canStartWork()) {
             Job job = iterator.next();
             if (!job.level.getServer().isRunning() || job.tick(budget)) {
                 job.releaseTerrainTicket();
@@ -143,8 +144,8 @@ public final class NuclearBlastManager {
         }
 
         private void processTerrain(Budget budget) {
-            if (terrainDone || !budget.canInspect()) return;
-            while (terrainChunkIndex < terrainChunks.size() && budget.canInspect()) {
+            if (terrainDone || !budget.canStartWork()) return;
+            while (terrainChunkIndex < terrainChunks.size() && budget.canStartWork()) {
                 long packed = terrainChunks.get(terrainChunkIndex);
                 if (heldTerrainChunk != packed) {
                     if (loadedTerrainChunkThisTick) return;
@@ -160,7 +161,7 @@ public final class NuclearBlastManager {
                 }
 
                 ChunkPos chunkPos = new ChunkPos(packed);
-                while (terrainColumnIndex < 256 && budget.canInspect()) {
+                while (terrainColumnIndex < 256 && budget.canStartWork()) {
                     if (!budget.canProcessColumn(profile.craterDepth() + profile.rimHeight() + 2)) return;
                     int local = terrainColumnIndex++;
                     int bx = chunkPos.getMinBlockX() + (local & 15);
@@ -243,7 +244,7 @@ public final class NuclearBlastManager {
             int probes = 0;
             while (windowChunkIndex < windowChunks.size()
                     && probes++ < WINDOW_CHUNK_PROBES_PER_TICK
-                    && budget.canInspect()) {
+                    && budget.canStartWork()) {
                 ChunkPos pos = new ChunkPos(windowChunks.get(windowChunkIndex++));
                 LevelChunk chunk = level.getChunkSource().getChunkNow(pos.x, pos.z);
                 if (chunk == null) continue;
@@ -253,7 +254,7 @@ public final class NuclearBlastManager {
         }
 
         private void processSable(Budget budget) {
-            while (sableTargetIndex < sableTargets.size() && budget.canInspect()) {
+            while (sableTargetIndex < sableTargets.size() && budget.canStartWork()) {
                 SableTarget target = sableTargets.get(sableTargetIndex);
                 if (target.process(this, budget)) return;
                 sableTargetIndex++;
@@ -306,18 +307,25 @@ public final class NuclearBlastManager {
         int inspections;
         final int maxChanges;
         final int maxInspections;
+        final long deadlineNanos;
 
         Budget(int maxChanges, int maxInspections) {
             this.maxChanges = maxChanges;
             this.maxInspections = maxInspections;
+            this.deadlineNanos = System.nanoTime() + MAX_WORK_NANOS_PER_TICK;
         }
 
         boolean canInspect() {
             return changes < maxChanges && inspections < maxInspections;
         }
 
+        boolean canStartWork() {
+            return canInspect() && System.nanoTime() < deadlineNanos;
+        }
+
         boolean canProcessColumn(int worstCaseChanges) {
-            return maxChanges - changes >= worstCaseChanges
+            return canStartWork()
+                    && maxChanges - changes >= worstCaseChanges
                     && maxInspections - inspections >= worstCaseChanges;
         }
 
@@ -349,7 +357,7 @@ public final class NuclearBlastManager {
                     * job.profile.constructDamageRadius();
             double glassSquared = (double) job.profile.glassRadius() * job.profile.glassRadius();
             BlockPos.MutableBlockPos localPos = new BlockPos.MutableBlockPos();
-            while (index < bounds.volume() && budget.canInspect()) {
+            while (index < bounds.volume() && budget.canStartWork()) {
                 int current = index++;
                 int ly = current / plane;
                 int remainder = current - ly * plane;

@@ -1,5 +1,13 @@
 # CBC Realistic Ballistics
 
+## 1.9.24 - H-bomb crater and explosion-load fix
+
+- Mini H-bomb and H-bomb delayed TNT rings are replaced reliably by the continuous crater model.
+- Nuclear terrain destruction remains drop-free, preventing item-entity storms after large detonations.
+- The addon's duplicate scorch scanner is disabled while its immediate entity thermal pulse remains active.
+- Crater, Sable and delayed-aftermath work now share stricter change, inspection and wall-clock budgets.
+- Projectile flight, drag, lifetime and guidance are unchanged.
+
 ## 1.9.23 - persistent nuclear aftermath
 
 - Nuclear detonations are saved per dimension with their type, centre, game time and physical radii.

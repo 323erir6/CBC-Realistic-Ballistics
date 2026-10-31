@@ -15,10 +15,12 @@
     "EntityMixin",
     "FuzedBigCannonProjectileMixin",
     "HEShellProjectileMixin",
+    "HBombMiniProjectileMixin",
     "HBombProjectileMixin",
     "LevelMixin",
     "MountedDualCannonContraptionMixin",
     "NukeShellProjectileMixin",
+    "NukeScorchManagerMixin",
     "NuclearExplosionNoDropsMixin",
     "ProjectileMixin",
     "ShellessInertBigCannonProjectileMixin"

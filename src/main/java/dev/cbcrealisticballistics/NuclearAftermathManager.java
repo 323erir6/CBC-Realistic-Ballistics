@@ -31,8 +31,9 @@ public final class NuclearAftermathManager {
     private static final int REMOVE_FLAGS = Block.UPDATE_CLIENTS
             | Block.UPDATE_KNOWN_SHAPE
             | Block.UPDATE_SUPPRESS_DROPS;
-    private static final int MAX_INSPECTIONS_PER_TICK = 12000;
-    private static final int MAX_CHANGES_PER_TICK = 700;
+    private static final int MAX_INSPECTIONS_PER_TICK = 6000;
+    private static final int MAX_CHANGES_PER_TICK = 400;
+    private static final long MAX_WORK_NANOS_PER_TICK = 2_000_000L;
     private static final int MAX_COLUMN_DEPTH = 40;
     private static final Map<ChunkAccess, Long> PROCESSED_THROUGH =
             Collections.synchronizedMap(new WeakHashMap<>());
@@ -231,7 +232,9 @@ public final class NuclearAftermathManager {
             if (Math.abs(blast.x() - pos.getX()) >= Math.abs(blast.z() - pos.getZ())) towardZ = 0;
             else towardX = 0;
 
-            for (int offset = 0; offset < depth && budget.available(); ++offset) {
+            // Finish a column once started so a wall-clock yield cannot leave a
+            // deterministic pressure-wave column half processed.
+            for (int offset = 0; offset < depth && budget.withinLimits(); ++offset) {
                 pos.setY(topY - offset);
                 BlockState state = level.getBlockState(pos);
                 budget.inspect();
@@ -367,20 +370,27 @@ public final class NuclearAftermathManager {
     private static final class Budget {
         final int maxInspections;
         final int maxChanges;
+        final long deadlineNanos;
         int inspections;
         int changes;
 
         Budget(int maxInspections, int maxChanges) {
             this.maxInspections = maxInspections;
             this.maxChanges = maxChanges;
+            this.deadlineNanos = System.nanoTime() + MAX_WORK_NANOS_PER_TICK;
         }
 
         boolean available() {
+            return withinLimits() && System.nanoTime() < deadlineNanos;
+        }
+
+        boolean withinLimits() {
             return inspections < maxInspections && changes < maxChanges;
         }
 
         boolean canProcessColumn() {
-            return maxInspections - inspections >= MAX_COLUMN_DEPTH
+            return available()
+                    && maxInspections - inspections >= MAX_COLUMN_DEPTH
                     && maxChanges - changes >= MAX_COLUMN_DEPTH;
         }
 

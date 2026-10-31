@@ -1,33 +1,30 @@
 package dev.cbcrealisticballistics.mixin;
 
-import com.example.cbcenhancedshells.NukeFxProfile;
 import dev.cbcrealisticballistics.NuclearBlastManager;
 import net.minecraft.core.Position;
 import net.minecraft.server.level.ServerLevel;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+/** Replaces the addon's delayed TNT rings with one budgeted H-bomb crater. */
 @Pseudo
-@Mixin(targets = {
-        "com.example.cbcenhancedshells.shells.HBombMiniShellProjectile",
-        "com.example.cbcenhancedshells.shells.HBombShellProjectile"
-}, remap = false)
+@Mixin(targets = "com.example.cbcenhancedshells.shells.HBombShellProjectile", remap = false)
 public abstract class HBombProjectileMixin {
-    @Shadow
-    protected abstract NukeFxProfile getFxProfile();
-
-    @Inject(method = "spawnShockwaveRings", at = @At("HEAD"), cancellable = true)
+    @Inject(
+            method = "spawnShockwaveRings(Lnet/minecraft/core/Position;Lnet/minecraft/server/level/ServerLevel;)V",
+            at = @At("HEAD"),
+            cancellable = true,
+            remap = false
+    )
     private void cbcRealisticBallistics$replaceExplosionRings(
             Position position,
             ServerLevel level,
             CallbackInfo callback
     ) {
-        NuclearBlastManager.start(
-                level, position.x(), position.y(), position.z(), getFxProfile().ordinal());
+        NuclearBlastManager.start(level, position.x(), position.y(), position.z(), 3);
         callback.cancel();
     }
 }
