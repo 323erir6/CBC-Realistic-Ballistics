@@ -1,5 +1,14 @@
 # CBC Realistic Ballistics
 
+## 1.9.29 - thermal flash and realistic structural hierarchy
+
+- Foliage and fragile plants are read from the real world-surface heightmap and are easier to remove than trunks.
+- Structures within 25% of the pressure radius are demolished above local ground reference; structures out to 45% receive heavy damage.
+- Grass, paths, farmland, moss, podzol and similar surfaces become dirt throughout half of the pressure radius.
+- The zero-depth crater edge is explicitly scorched, removing the surviving green/path ring.
+- Loaded aftermath chunks are queued before crater excavation and up to sixteen are admitted per tick under a four-millisecond budget.
+- Distant thermal work remains persistent and runs when chunks load naturally instead of force-generating the entire flash radius.
+
 ## 1.9.28 - full shockwave damage radius
 
 - Living-entity damage now extends to each warhead's complete pressure/glass radius instead of stopping at the crater wall.

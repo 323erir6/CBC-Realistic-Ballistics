@@ -23,6 +23,18 @@ public record NuclearBlastProfile(
         return craterRadius + rimWidth;
     }
 
+    public int thermalFlashRadius() {
+        return Math.max(outerTerrainRadius(), glassRadius / 2);
+    }
+
+    public int severeStructureRadius() {
+        return Math.max(outerTerrainRadius(), (int) Math.round(glassRadius * 0.25));
+    }
+
+    public int heavyStructureRadius() {
+        return Math.max(severeStructureRadius(), (int) Math.round(glassRadius * 0.45));
+    }
+
     public int craterFloorY(int groundY, double horizontalDistance) {
         double u = Math.min(1.0, horizontalDistance / craterRadius);
         double bowl = Math.pow(Math.max(0.0, 1.0 - u * u), 1.5);

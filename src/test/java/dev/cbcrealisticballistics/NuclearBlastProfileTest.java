@@ -22,5 +22,11 @@ public final class NuclearBlastProfileTest {
         if (NuclearBlastProfile.byOrdinal(3).craterRadius() != 240) {
             throw new AssertionError("Largest blast must preserve the addon's former 240-block area");
         }
+        NuclearBlastProfile mini = NuclearBlastProfile.byOrdinal(2);
+        if (mini.thermalFlashRadius() != 425
+                || mini.severeStructureRadius() != 213
+                || mini.heavyStructureRadius() != 383) {
+            throw new AssertionError("Mini H-bomb aftermath radii are inconsistent");
+        }
     }
 }

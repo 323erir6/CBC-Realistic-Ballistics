@@ -42,7 +42,8 @@ public final class NuclearBlastManager {
             | Block.UPDATE_SUPPRESS_DROPS;
     private static final int MAX_CHANGES_PER_TICK = 3000;
     private static final int MAX_INSPECTIONS_PER_TICK = 24000;
-    private static final int WINDOW_CHUNK_PROBES_PER_TICK = 64;
+    private static final int WINDOW_CHUNK_PROBES_PER_TICK = 512;
+    private static final int WINDOW_CHUNK_ENQUEUES_PER_TICK = 16;
     private static final long MAX_WORK_NANOS_PER_TICK = 7_000_000L;
     private static final double BLOCK_HALF_DIAGONAL = Math.sqrt(0.5);
     private static final List<Job> JOBS = new ArrayList<>();
@@ -160,8 +161,10 @@ public final class NuclearBlastManager {
 
         boolean tick(Budget budget) {
             forcedTerrainChunkThisTick = false;
-            processTerrain(budget);
+            // Queue loaded aftermath chunks before terrain consumes the block
+            // budget, so flash and structural damage appear with the blast.
             processWindows(budget);
+            processTerrain(budget);
             processSable(budget);
             return terrainDone
                     && windowChunkIndex >= windowChunks.size()
@@ -240,6 +243,13 @@ public final class NuclearBlastManager {
                     BlockState state = level.getBlockState(pos);
                     if (removeWithoutDrops(level, pos, state)) budget.change();
                 }
+                pos.setY(floorY);
+                budget.inspect();
+                BlockState floor = level.getBlockState(pos);
+                if (isScorchableSurface(floor)
+                        && level.setBlock(pos, Blocks.DIRT.defaultBlockState(), REMOVE_FLAGS)) {
+                    budget.change();
+                }
                 return;
             }
 
@@ -293,14 +303,16 @@ public final class NuclearBlastManager {
 
         private void processWindows(Budget budget) {
             int probes = 0;
+            int enqueued = 0;
             while (windowChunkIndex < windowChunks.size()
                     && probes++ < WINDOW_CHUNK_PROBES_PER_TICK
+                    && enqueued < WINDOW_CHUNK_ENQUEUES_PER_TICK
                     && budget.canStartWork()) {
                 ChunkPos pos = new ChunkPos(windowChunks.get(windowChunkIndex++));
                 LevelChunk chunk = level.getChunkSource().getChunkNow(pos.x, pos.z);
                 if (chunk == null) continue;
                 NuclearAftermathManager.enqueue(level, chunk, historyRecord);
-                return;
+                enqueued++;
             }
         }
 
@@ -332,6 +344,16 @@ public final class NuclearBlastManager {
     private static BlockState rimMaterial(BlockState surface) {
         if (surface.is(Blocks.STONE) || surface.is(Blocks.DEEPSLATE)) return surface;
         return Blocks.COARSE_DIRT.defaultBlockState();
+    }
+
+    private static boolean isScorchableSurface(BlockState state) {
+        return state.is(Blocks.GRASS_BLOCK)
+                || state.is(Blocks.DIRT_PATH)
+                || state.is(Blocks.FARMLAND)
+                || state.is(Blocks.PODZOL)
+                || state.is(Blocks.MYCELIUM)
+                || state.is(Blocks.MOSS_BLOCK)
+                || state.is(Blocks.ROOTED_DIRT);
     }
 
     private static int profileOrdinal(NuclearBlastProfile profile) {

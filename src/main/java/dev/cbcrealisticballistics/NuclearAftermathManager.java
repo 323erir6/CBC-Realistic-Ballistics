@@ -4,6 +4,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -31,10 +32,10 @@ public final class NuclearAftermathManager {
     private static final int REMOVE_FLAGS = Block.UPDATE_CLIENTS
             | Block.UPDATE_KNOWN_SHAPE
             | Block.UPDATE_SUPPRESS_DROPS;
-    private static final int MAX_INSPECTIONS_PER_TICK = 6000;
-    private static final int MAX_CHANGES_PER_TICK = 400;
-    private static final long MAX_WORK_NANOS_PER_TICK = 2_000_000L;
-    private static final int MAX_COLUMN_DEPTH = 40;
+    private static final int MAX_INSPECTIONS_PER_TICK = 14000;
+    private static final int MAX_CHANGES_PER_TICK = 1200;
+    private static final long MAX_WORK_NANOS_PER_TICK = 4_000_000L;
+    private static final int MAX_COLUMN_DEPTH = 64;
     private static final Map<ChunkAccess, Long> PROCESSED_THROUGH =
             Collections.synchronizedMap(new WeakHashMap<>());
     private static final ArrayDeque<ChunkJob> JOBS = new ArrayDeque<>();
@@ -138,6 +139,7 @@ public final class NuclearAftermathManager {
                 if (phase == Phase.GLASS && !processGlass(blast, budget)) return false;
                 if (phase == Phase.BLOCK_ENTITIES && !processBlockEntities(blast, budget)) return false;
                 if (phase == Phase.STRUCTURES && !processStructures(blast, budget)) return false;
+                if (phase == Phase.FLASH && !processFlash(blast, budget)) return false;
                 if (phase == Phase.DONE) nextRecord();
             }
             return recordIndex >= records.size();
@@ -203,14 +205,61 @@ public final class NuclearAftermathManager {
                 processColumn(blast, lx, lz, budget);
             }
             if (columnIndex < 256) return false;
+            columnIndex = 0;
+            phase = Phase.FLASH;
+            return true;
+        }
+
+        private boolean processFlash(
+                NuclearBlastHistory.BlastRecord blast, Budget budget
+        ) {
+            while (columnIndex < 256 && budget.canProcessColumn()) {
+                int packed = columnIndex++;
+                int lx = packed & 15;
+                int lz = packed >>> 4;
+                processFlashColumn(blast, lx, lz, budget);
+            }
+            if (columnIndex < 256) return false;
             phase = Phase.DONE;
             return true;
+        }
+
+        private void processFlashColumn(
+                NuclearBlastHistory.BlastRecord blast, int lx, int lz, Budget budget
+        ) {
+            int bx = chunkPos.getMinBlockX() + lx;
+            int bz = chunkPos.getMinBlockZ() + lz;
+            double dx = bx + 0.5 - blast.x();
+            double dz = bz + 0.5 - blast.z();
+            int flashRadius = blast.profile().thermalFlashRadius();
+            if (dx * dx + dz * dz > (double) flashRadius * flashRadius) return;
+
+            int topY = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, lx, lz) - 1;
+            BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(bx, topY, bz);
+            int minimumY = Math.max(level.getMinBuildHeight(), topY - MAX_COLUMN_DEPTH);
+            for (int by = topY; by >= minimumY && budget.withinLimits(); --by) {
+                pos.setY(by);
+                BlockState state = level.getBlockState(pos);
+                budget.inspect();
+                if (state.isAir()) continue;
+                if (isFragileVegetation(state)) {
+                    if (removeWithoutDrops(pos, state)) budget.change();
+                    continue;
+                }
+                if (isScorchableGround(state)) {
+                    if (level.setBlock(pos, Blocks.DIRT.defaultBlockState(), REMOVE_FLAGS)) {
+                        budget.change();
+                    }
+                    break;
+                }
+                if (isLikelyTerrain(state)) break;
+            }
         }
 
         private void processColumn(
                 NuclearBlastHistory.BlastRecord blast, int lx, int lz, Budget budget
         ) {
-            int topY = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, lx, lz) - 1;
+            int topY = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, lx, lz) - 1;
             if (topY <= level.getMinBuildHeight()) return;
             int minNeighbour = topY;
             for (int[] offset : NEIGHBOURS) {
@@ -218,15 +267,27 @@ public final class NuclearAftermathManager {
                 int nz = lz + offset[1];
                 if (nx < 0 || nx > 15 || nz < 0 || nz > 15) continue;
                 minNeighbour = Math.min(minNeighbour,
-                        chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, nx, nz) - 1);
+                        chunk.getHeight(Heightmap.Types.WORLD_SURFACE, nx, nz) - 1);
             }
             BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(
                     chunkPos.getMinBlockX() + lx, topY, chunkPos.getMinBlockZ() + lz);
             BlockState topState = level.getBlockState(pos);
             int protrusion = Math.max(0, topY - minNeighbour);
             if (!isLikelyTerrain(topState)) protrusion = Math.max(protrusion, 6);
-            if (protrusion < 2) return;
-            int depth = Math.min(MAX_COLUMN_DEPTH, protrusion + 3);
+            double horizontalDx = pos.getX() + 0.5 - blast.x();
+            double horizontalDz = pos.getZ() + 0.5 - blast.z();
+            double horizontalDistanceSquared = horizontalDx * horizontalDx
+                    + horizontalDz * horizontalDz;
+            NuclearBlastProfile profile = blast.profile();
+            boolean severe = horizontalDistanceSquared
+                    <= (double) profile.severeStructureRadius() * profile.severeStructureRadius();
+            boolean heavy = horizontalDistanceSquared
+                    <= (double) profile.heavyStructureRadius() * profile.heavyStructureRadius();
+            if (protrusion < 2 && !severe && !isFragileVegetation(topState)) return;
+            int baselineY = Math.min(topY, (int) Math.floor(blast.y()));
+            int depth = severe
+                    ? Math.min(MAX_COLUMN_DEPTH, Math.max(1, topY - baselineY + 1))
+                    : Math.min(MAX_COLUMN_DEPTH, protrusion + 6);
             int towardX = Integer.compare((int) Math.floor(blast.x()), pos.getX());
             int towardZ = Integer.compare((int) Math.floor(blast.z()), pos.getZ());
             if (Math.abs(blast.x() - pos.getX()) >= Math.abs(blast.z() - pos.getZ())) towardZ = 0;
@@ -240,6 +301,15 @@ public final class NuclearAftermathManager {
                 budget.inspect();
                 if (state.isAir() || NuclearGlassSupport.isGlass(state)
                         || state.getDestroySpeed(level, pos) < 0.0f) continue;
+                boolean fragile = isFragileVegetation(state);
+                if (fragile) {
+                    if (removeWithoutDrops(pos, state)) budget.change();
+                    continue;
+                }
+                if (severe && (pos.getY() > baselineY || !isLikelyTerrain(state))) {
+                    if (removeWithoutDrops(pos, state)) budget.change();
+                    continue;
+                }
                 BlockPos front = pos.offset(towardX, 0, towardZ);
                 if (!level.getBlockState(front).isAir() && offset > 0) continue;
                 double distanceSquared = distanceSquared(blast, pos);
@@ -250,6 +320,7 @@ public final class NuclearAftermathManager {
                 float hardness = Math.max(0.0f, state.getDestroySpeed(level, pos));
                 double material = 1.0 / (1.0 + resistance / 8.0 + hardness / 10.0);
                 double chance = Math.min(0.92, Math.max(0.0, (energy - 0.12) * 0.55 * material));
+                if (heavy && !isLikelyTerrain(state)) chance = Math.max(chance, 0.72);
                 if (deterministicUnit(blast.sequence(), pos) < chance
                         && removeWithoutDrops(pos, state)) budget.change();
             }
@@ -332,6 +403,29 @@ public final class NuclearAftermathManager {
                 || path.endsWith("_ore") || path.endsWith("terracotta");
     }
 
+    private static boolean isFragileVegetation(BlockState state) {
+        if (state.is(Blocks.GRASS_BLOCK)) return false;
+        if (state.is(BlockTags.LEAVES) || state.is(BlockTags.FLOWERS)) return true;
+        String path = net.minecraft.core.registries.BuiltInRegistries.BLOCK
+                .getKey(state.getBlock()).getPath();
+        return path.contains("leaves") || path.contains("flower")
+                || path.contains("grass") || path.contains("fern")
+                || path.contains("bush") || path.contains("sapling")
+                || path.contains("vine") || path.contains("mushroom")
+                || path.contains("crop") || path.contains("roots")
+                || path.contains("azalea");
+    }
+
+    private static boolean isScorchableGround(BlockState state) {
+        return state.is(Blocks.GRASS_BLOCK)
+                || state.is(Blocks.DIRT_PATH)
+                || state.is(Blocks.FARMLAND)
+                || state.is(Blocks.PODZOL)
+                || state.is(Blocks.MYCELIUM)
+                || state.is(Blocks.MOSS_BLOCK)
+                || state.is(Blocks.ROOTED_DIRT);
+    }
+
     static double inverseSquareEnergy(
             NuclearBlastHistory.BlastRecord blast, double distanceSquared
     ) {
@@ -364,6 +458,7 @@ public final class NuclearAftermathManager {
         GLASS,
         BLOCK_ENTITIES,
         STRUCTURES,
+        FLASH,
         DONE
     }
 
