@@ -22,6 +22,14 @@ public final class NuclearBlastProfileTest {
                     || profile.rimLayers(profile.craterRadius() + profile.rimWidth() * 0.5) <= 0) {
                 throw new AssertionError("Raised rim must peak between its inner and outer edges");
             }
+            int cavityRadius = profile.undergroundCavityRadius();
+            int cavityCentre = profile.undergroundCavityHalfHeight(0.0);
+            int cavityEdge = profile.undergroundCavityHalfHeight(cavityRadius + 1.0);
+            if (cavityCentre != profile.undergroundCavityVerticalRadius()
+                    || cavityEdge != 0
+                    || profile.surfaceBreakoutDepth() <= cavityCentre) {
+                throw new AssertionError("Underground shock cavity geometry is inconsistent");
+            }
         }
         if (NuclearBlastProfile.byOrdinal(3).craterRadius() != 240) {
             throw new AssertionError("Largest blast must preserve the addon's former 240-block area");

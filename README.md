@@ -1,5 +1,12 @@
 # CBC Realistic Ballistics
 
+## 2.0.3 - underground primary shock cavity
+
+- Buried nuclear and thermonuclear charges excavate a three-dimensional ellipsoidal cavity around their actual detonation point.
+- A surface crater is created only when burial depth is within the profile's pressure-breakout depth.
+- Deep underground detonations no longer draw a detached bowl on the terrain surface.
+- Shallow buried cavities connect naturally into the surface crater instead of being sealed by a replacement floor block.
+
 ## 2.0.2 - terrain-following crater geometry
 
 - Every crater column now finds the natural local ground beneath buildings, vegetation and water before changing terrain.

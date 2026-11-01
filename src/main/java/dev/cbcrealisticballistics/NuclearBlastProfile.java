@@ -35,6 +35,25 @@ public record NuclearBlastProfile(
         return Math.max(severeStructureRadius(), (int) Math.round(glassRadius * 0.80));
     }
 
+    public int undergroundCavityRadius() {
+        return Math.max(8, Math.max(craterDepth * 2, (int) Math.round(craterRadius / 3.0)));
+    }
+
+    public int undergroundCavityVerticalRadius() {
+        return Math.max(craterDepth, (int) Math.round(undergroundCavityRadius() * 0.65));
+    }
+
+    public int surfaceBreakoutDepth() {
+        return undergroundCavityVerticalRadius() + craterDepth / 2;
+    }
+
+    public int undergroundCavityHalfHeight(double horizontalDistance) {
+        double u = horizontalDistance / undergroundCavityRadius();
+        if (u > 1.0) return 0;
+        return Math.max(1, (int) Math.ceil(
+                undergroundCavityVerticalRadius() * Math.sqrt(Math.max(0.0, 1.0 - u * u))));
+    }
+
     public int craterFloorY(int groundY, double horizontalDistance) {
         double u = Math.min(1.0, horizontalDistance / craterRadius);
         double bowl = Math.pow(Math.max(0.0, 1.0 - u * u), 1.5);

@@ -126,6 +126,7 @@ public final class NuclearBlastManager {
         final int scorchRadius;
         final int terrainRadius;
         final boolean craterEnabled;
+        final boolean undergroundCavityEnabled;
         final List<Long> terrainChunks;
         final List<Long> windowChunks;
         final List<SableTarget> sableTargets;
@@ -158,8 +159,11 @@ public final class NuclearBlastManager {
             int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, centerX, centerZ) - 1;
             int naturalSurface = findTerrainSurfaceY(centerX, centerZ, top, null);
             boolean hasNaturalGround = naturalSurface != Integer.MIN_VALUE;
+            double burialDepth = hasNaturalGround ? naturalSurface - y : 0.0;
+            this.undergroundCavityEnabled = hasNaturalGround && burialDepth >= 2.0;
             this.craterEnabled = hasNaturalGround
-                    && y - naturalSurface <= Math.max(24.0, profile.craterRadius() * 0.6);
+                    && y - naturalSurface <= Math.max(24.0, profile.craterRadius() * 0.6)
+                    && burialDepth <= profile.surfaceBreakoutDepth();
             float cloudRadius = switch (profileOrdinal(profile)) {
                 case 1 -> 130.0f;
                 case 2 -> 170.0f;
@@ -213,7 +217,8 @@ public final class NuclearBlastManager {
                 damageWave.catchUpChunk(chunkPos);
                 while (terrainColumnIndex < 256 && budget.canStartWork()) {
                     if (!budget.canProcessColumn(MAX_TERRAIN_SEARCH_DEPTH
-                            + profile.craterDepth() + profile.rimHeight() + 2)) return;
+                            + profile.craterDepth() + profile.rimHeight()
+                            + profile.undergroundCavityVerticalRadius() * 2 + 4)) return;
                     int local = terrainColumnIndex++;
                     int bx = chunkPos.getMinBlockX() + (local & 15);
                     int bz = chunkPos.getMinBlockZ() + (local >>> 4);
@@ -245,6 +250,12 @@ public final class NuclearBlastManager {
             BlockPos top = new BlockPos(bx, topY, bz);
 
             double craterDistance = Math.max(0.0, distance - BLOCK_HALF_DIAGONAL);
+            int cavityHalfHeight = undergroundCavityEnabled
+                    ? profile.undergroundCavityHalfHeight(distance)
+                    : 0;
+            if (cavityHalfHeight > 0) {
+                excavateUndergroundCavity(bx, bz, cavityHalfHeight, budget);
+            }
             boolean terrainShape = craterEnabled
                     && distance <= profile.outerTerrainRadius() + BLOCK_HALF_DIAGONAL;
             int localGroundY = terrainShape
@@ -273,7 +284,10 @@ public final class NuclearBlastManager {
                 BlockState floor = level.getBlockState(pos);
                 boolean scorchedTransition = craterDistance
                         >= Math.max(0.0, profile.craterRadius() - profile.rimWidth());
-                if (!floor.is(Blocks.BEDROCK)
+                boolean floorOpenedIntoCavity = cavityHalfHeight > 0
+                        && Math.abs((floorY + 0.5) - y) <= cavityHalfHeight + 0.5;
+                if (!floorOpenedIntoCavity
+                        && !floor.is(Blocks.BEDROCK)
                         && (scorchedTransition || isScorchableSurface(floor))
                         && level.setBlock(pos, Blocks.COARSE_DIRT.defaultBlockState(), REMOVE_FLAGS)) {
                     budget.change();
@@ -317,6 +331,22 @@ public final class NuclearBlastManager {
 
             if (!ClaimProtectionHelper.canModifyBlock(level, top)) return;
             if (distance <= scorchRadius) scorchSurface(top, budget);
+        }
+
+        private void excavateUndergroundCavity(
+                int bx, int bz, int halfHeight, Budget budget
+        ) {
+            int minimumY = Math.max(
+                    level.getMinBuildHeight(), (int) Math.floor(y - halfHeight));
+            int maximumY = Math.min(
+                    level.getMaxBuildHeight() - 1, (int) Math.ceil(y + halfHeight));
+            BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(bx, minimumY, bz);
+            for (int by = minimumY; by <= maximumY; ++by) {
+                pos.setY(by);
+                budget.inspect();
+                BlockState state = level.getBlockState(pos);
+                if (removeWithoutDrops(level, pos, state)) budget.change();
+            }
         }
 
         private int findTerrainSurfaceY(int bx, int bz, int topY, Budget budget) {
