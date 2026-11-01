@@ -10,6 +10,7 @@ import dev.ryanhcode.sable.sublevel.SubLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
@@ -53,7 +54,7 @@ public final class NuclearBlastManager {
     public static void start(ServerLevel level, double x, double y, double z, int profileOrdinal) {
         NuclearBlastProfile profile = NuclearBlastProfile.byOrdinal(profileOrdinal);
         DamageWave damageWave = new DamageWave(
-                level, x, y, z, profileOrdinal, profile.craterRadius(), level.getGameTime());
+                level, x, y, z, profile.glassRadius(), level.getGameTime());
         DAMAGE_WAVES.add(damageWave);
         NuclearBlastHistory.BlastRecord historyRecord = NuclearBlastHistory.record(
                 level, x, y, z, profileOrdinal);
@@ -439,7 +440,6 @@ public final class NuclearBlastManager {
         final double x;
         final double y;
         final double z;
-        final int profileOrdinal;
         final double maximumRadius;
         final long startedGameTime;
         final Set<UUID> hitEntities = new HashSet<>();
@@ -450,7 +450,6 @@ public final class NuclearBlastManager {
                 double x,
                 double y,
                 double z,
-                int profileOrdinal,
                 double maximumRadius,
                 long startedGameTime
         ) {
@@ -458,34 +457,27 @@ public final class NuclearBlastManager {
             this.x = x;
             this.y = y;
             this.z = z;
-            this.profileOrdinal = profileOrdinal;
             this.maximumRadius = maximumRadius;
             this.startedGameTime = startedGameTime;
         }
 
         boolean tick() {
             long elapsed = level.getGameTime() - startedGameTime;
-            double radius = NuclearDamageWaveMath.radius(
-                    profileOrdinal, elapsed, maximumRadius);
+            double radius = NuclearDamageWaveMath.radius(elapsed, maximumRadius);
             if (radius < 0.0) return false;
 
             double radiusSquared = radius * radius;
             double previousSquared = previousRadius < 0.0
                     ? -1.0
                     : previousRadius * previousRadius;
-            AABB bounds = new AABB(
-                    x - radius, level.getMinBuildHeight(), z - radius,
-                    x + radius, level.getMaxBuildHeight(), z + radius
-            );
-            damageEntities(bounds, previousSquared, radiusSquared);
+            damageLoadedEntities(previousSquared, radiusSquared);
             previousRadius = radius;
             return radius >= maximumRadius;
         }
 
         void catchUpChunk(ChunkPos chunkPos) {
             long elapsed = level.getGameTime() - startedGameTime;
-            double radius = NuclearDamageWaveMath.radius(
-                    profileOrdinal, elapsed, maximumRadius);
+            double radius = NuclearDamageWaveMath.radius(elapsed, maximumRadius);
             if (radius <= 0.0) return;
             AABB chunkBounds = new AABB(
                     chunkPos.getMinBlockX(), level.getMinBuildHeight(), chunkPos.getMinBlockZ(),
@@ -504,6 +496,28 @@ public final class NuclearBlastManager {
                     candidate -> isDamageable(candidate)
                             && !hitEntities.contains(candidate.getUUID())
             )) {
+                double dx = entity.getX() - x;
+                double dz = entity.getZ() - z;
+                double horizontalDistanceSquared = dx * dx + dz * dz;
+                if (horizontalDistanceSquared < innerRadiusSquared
+                        || horizontalDistanceSquared > outerRadiusSquared) continue;
+                float damage = NuclearDamageWaveMath.damage(
+                        Math.sqrt(horizontalDistanceSquared), maximumRadius);
+                if (damage <= 0.0f) continue;
+                entity.hurt(level.damageSources().genericKill(), damage);
+                hitEntities.add(entity.getUUID());
+            }
+        }
+
+        private void damageLoadedEntities(
+                double innerRadiusSquared, double outerRadiusSquared
+        ) {
+            // Iterating the level's loaded entities is far cheaper than asking
+            // the section manager to traverse an AABB up to 3,600 blocks wide.
+            for (Entity candidate : level.getAllEntities()) {
+                if (!(candidate instanceof LivingEntity entity)
+                        || !isDamageable(entity)
+                        || hitEntities.contains(entity.getUUID())) continue;
                 double dx = entity.getX() - x;
                 double dz = entity.getZ() - z;
                 double horizontalDistanceSquared = dx * dx + dz * dz;

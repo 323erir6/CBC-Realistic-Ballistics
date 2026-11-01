@@ -1,5 +1,13 @@
 # CBC Realistic Ballistics
 
+## 1.9.28 - full shockwave damage radius
+
+- Living-entity damage now extends to each warhead's complete pressure/glass radius instead of stopping at the crater wall.
+- The front travels at approximately 343 blocks per second, reaching nearby terrain immediately and the outer H-bomb radius in about five seconds.
+- Quadratic attenuation still leaves survival possible only in the thin outer edge of the pressure radius.
+- Large waves iterate loaded entities directly instead of scanning millions of empty entity sections.
+- Creative and spectator players remain immune.
+
 ## 1.9.27 - reliable surface wave and faster crater formation
 
 - Damage-wave distance is measured horizontally, so crater slopes and excavated floors cannot escape through vertical offset.
