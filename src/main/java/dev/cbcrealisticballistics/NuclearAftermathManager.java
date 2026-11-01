@@ -231,10 +231,20 @@ public final class NuclearAftermathManager {
             int bz = chunkPos.getMinBlockZ() + lz;
             double dx = bx + 0.5 - blast.x();
             double dz = bz + 0.5 - blast.z();
-            int flashRadius = blast.profile().thermalFlashRadius();
-            if (dx * dx + dz * dz > (double) flashRadius * flashRadius) return;
-
             int topY = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, lx, lz) - 1;
+            int surfaceY = chunk.getHeight(
+                    Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, lx, lz) - 1;
+            double burstHeight = blast.y() - surfaceY;
+            double horizontalDistance = Math.sqrt(dx * dx + dz * dz);
+            BlockPos noisePos = new BlockPos(bx, surfaceY, bz);
+            double boundaryNoise = deterministicUnit(
+                    blast.sequence() ^ 0x6A09E667F3BCC909L, noisePos);
+            double probability = blast.profile().thermalScorchProbability(
+                    horizontalDistance, burstHeight, boundaryNoise);
+            if (probability <= 0.0
+                    || deterministicUnit(
+                    blast.sequence() ^ 0xBB67AE8584CAA73BL, noisePos) >= probability) return;
+
             BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(bx, topY, bz);
             int minimumY = Math.max(level.getMinBuildHeight(), topY - MAX_COLUMN_DEPTH);
             for (int by = topY; by >= minimumY && budget.withinLimits(); --by) {

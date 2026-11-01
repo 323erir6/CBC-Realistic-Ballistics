@@ -27,6 +27,41 @@ public record NuclearBlastProfile(
         return Math.max(outerTerrainRadius(), glassRadius / 2);
     }
 
+    public double thermalAltitudeFactor(double burstHeight) {
+        double scale = Math.max(24.0, craterRadius * 0.75);
+        return 1.0 - Math.exp(-Math.max(0.0, burstHeight) / scale);
+    }
+
+    public double thermalFlashRadius(double burstHeight) {
+        double expanded = thermalFlashRadius()
+                * (1.0 + 0.75 * thermalAltitudeFactor(burstHeight));
+        return Math.min(glassRadius / 1.15, expanded);
+    }
+
+    public int thermalFlashMaximumRadius(double burstHeight) {
+        if (burstHeight <= -surfaceBreakoutDepth()) return 0;
+        return Math.min(glassRadius, (int) Math.ceil(thermalFlashRadius(burstHeight) * 1.15));
+    }
+
+    public double thermalScorchProbability(
+            double horizontalDistance, double burstHeight, double boundaryNoise
+    ) {
+        double altitude = thermalAltitudeFactor(burstHeight);
+        double containment = burstHeight >= 0.0
+                ? 1.0
+                : Math.max(0.0, 1.0 + burstHeight / surfaceBreakoutDepth());
+        double density = (1.0 - 0.60 * altitude) * containment;
+        if (density <= 0.0) return 0.0;
+        double noise = Math.max(0.0, Math.min(1.0, boundaryNoise));
+        double noisyRadius = thermalFlashRadius(burstHeight) * (0.88 + 0.24 * noise);
+        if (horizontalDistance >= noisyRadius) return 0.0;
+        double solidRadius = noisyRadius * 0.55;
+        if (horizontalDistance <= solidRadius) return density;
+        double t = (horizontalDistance - solidRadius) / (noisyRadius - solidRadius);
+        double smoothFade = 1.0 - t * t * (3.0 - 2.0 * t);
+        return density * smoothFade;
+    }
+
     public int severeStructureRadius() {
         return Math.max(outerTerrainRadius(), (int) Math.round(glassRadius * 0.50));
     }

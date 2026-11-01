@@ -176,7 +176,8 @@ public final class NuclearBlastManager {
                     : 0;
             this.terrainRadius = Math.max(profile.outerTerrainRadius(), scorchRadius);
             this.terrainChunks = circleChunks(x, z, terrainRadius, true);
-            this.windowChunks = prioritizedAftermathChunks(x, z, profile);
+            double burstHeight = hasNaturalGround ? y - naturalSurface : 0.0;
+            this.windowChunks = prioritizedAftermathChunks(x, z, profile, burstHeight);
             this.sableTargets = SableBridge.targets(level, x, y, z, profile.glassRadius());
         }
 
@@ -457,12 +458,13 @@ public final class NuclearBlastManager {
     }
 
     private static List<Long> prioritizedAftermathChunks(
-            double x, double z, NuclearBlastProfile profile
+            double x, double z, NuclearBlastProfile profile, double burstHeight
     ) {
         // Surface scorching and nearby structures must be visible first. Only
         // this smaller thermal area is sorted; the enormous outer glass area
         // remains unsorted to avoid a detonation-time sorting spike.
-        List<Long> priority = circleChunks(x, z, profile.thermalFlashRadius(), true);
+        List<Long> priority = circleChunks(
+                x, z, profile.thermalFlashMaximumRadius(burstHeight), true);
         Set<Long> included = new HashSet<>(priority);
         List<Long> all = circleChunks(x, z, profile.glassRadius(), false);
         ArrayList<Long> ordered = new ArrayList<>(all.size());

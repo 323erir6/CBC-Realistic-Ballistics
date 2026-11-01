@@ -1,5 +1,12 @@
 # CBC Realistic Ballistics
 
+## 2.0.4 - altitude-scaled thermal scorch gradient
+
+- Scorched terrain now fades through a deterministic irregular transition instead of ending at a perfect circular edge.
+- Ground bursts retain a smaller, dense burned footprint with a fully scorched inner core.
+- Higher airbursts expand the thermal footprint while progressively lowering its block density.
+- Radius noise and scorch selection are coordinate-stable across saves, and the maximum footprint remains inside the full pressure radius.
+
 ## 2.0.3 - underground primary shock cavity
 
 - Buried nuclear and thermonuclear charges excavate a three-dimensional ellipsoidal cavity around their actual detonation point.

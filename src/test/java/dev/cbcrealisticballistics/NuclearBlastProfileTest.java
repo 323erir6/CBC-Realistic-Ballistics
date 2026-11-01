@@ -30,6 +30,24 @@ public final class NuclearBlastProfileTest {
                     || profile.surfaceBreakoutDepth() <= cavityCentre) {
                 throw new AssertionError("Underground shock cavity geometry is inconsistent");
             }
+            double groundRadius = profile.thermalFlashRadius(0.0);
+            double highRadius = profile.thermalFlashRadius(profile.craterRadius() * 2.0);
+            double groundDensity = profile.thermalScorchProbability(0.0, 0.0, 0.5);
+            double highDensity = profile.thermalScorchProbability(
+                    0.0, profile.craterRadius() * 2.0, 0.5);
+            double transition = profile.thermalScorchProbability(
+                    groundRadius * 0.8, 0.0, 0.5);
+            double contained = profile.thermalScorchProbability(
+                    0.0, -profile.surfaceBreakoutDepth() - 1.0, 0.5);
+            if (!(highRadius > groundRadius
+                    && groundDensity == 1.0
+                    && highDensity < groundDensity
+                    && transition > 0.0 && transition < groundDensity
+                    && contained == 0.0
+                    && profile.thermalFlashMaximumRadius(profile.craterRadius() * 10.0)
+                    <= profile.glassRadius())) {
+                throw new AssertionError("Altitude-scaled thermal footprint is inconsistent");
+            }
         }
         if (NuclearBlastProfile.byOrdinal(3).craterRadius() != 240) {
             throw new AssertionError("Largest blast must preserve the addon's former 240-block area");
