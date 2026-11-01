@@ -170,9 +170,7 @@ public final class NuclearBlastManager {
                     : 0;
             this.terrainRadius = Math.max(profile.outerTerrainRadius(), scorchRadius);
             this.terrainChunks = circleChunks(x, z, terrainRadius, true);
-            // The H-bomb glass radius spans tens of thousands of chunks.
-            // Their order is irrelevant, so avoid an O(n log n) boxed sort at detonation.
-            this.windowChunks = circleChunks(x, z, profile.glassRadius(), false);
+            this.windowChunks = prioritizedAftermathChunks(x, z, profile);
             this.sableTargets = SableBridge.targets(level, x, y, z, profile.glassRadius());
         }
 
@@ -263,7 +261,10 @@ public final class NuclearBlastManager {
                 pos.setY(floorY);
                 budget.inspect();
                 BlockState floor = level.getBlockState(pos);
-                if (isScorchableSurface(floor)
+                boolean scorchedTransition = craterDistance
+                        >= Math.max(0.0, profile.craterRadius() - profile.rimWidth());
+                if (!floor.is(Blocks.BEDROCK)
+                        && (scorchedTransition || isScorchableSurface(floor))
                         && level.setBlock(pos, Blocks.COARSE_DIRT.defaultBlockState(), REMOVE_FLAGS)) {
                     budget.change();
                 }
@@ -397,6 +398,23 @@ public final class NuclearBlastManager {
             }));
         }
         return chunks;
+    }
+
+    private static List<Long> prioritizedAftermathChunks(
+            double x, double z, NuclearBlastProfile profile
+    ) {
+        // Surface scorching and nearby structures must be visible first. Only
+        // this smaller thermal area is sorted; the enormous outer glass area
+        // remains unsorted to avoid a detonation-time sorting spike.
+        List<Long> priority = circleChunks(x, z, profile.thermalFlashRadius(), true);
+        Set<Long> included = new HashSet<>(priority);
+        List<Long> all = circleChunks(x, z, profile.glassRadius(), false);
+        ArrayList<Long> ordered = new ArrayList<>(all.size());
+        ordered.addAll(priority);
+        for (long packed : all) {
+            if (included.add(packed)) ordered.add(packed);
+        }
+        return ordered;
     }
 
     private static final class Budget {

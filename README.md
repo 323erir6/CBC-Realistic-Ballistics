@@ -1,5 +1,12 @@
 # CBC Realistic Ballistics
 
+## 2.0.1 - closed green band and complete structural columns
+
+- The shallow crater transition is forcibly surfaced with coarse dirt across one full rim width, eliminating the green inner band.
+- Loaded chunks inside the thermal radius are prioritised before the distant glass-only area, so scorched terrain appears around the crater immediately.
+- Structure destruction walks each exposed column from its highest block down to actual terrain instead of deriving depth from burst altitude.
+- Roofs, suspended lamps and other upper remnants therefore remain part of the same demolition pass after their supports disappear.
+
 ## 2.0.0 - sealed crater rim and wide structural devastation
 
 - Raised crater rims are rebuilt as a solid foundation-to-surface volume, removing buried structures and shallow cavities.

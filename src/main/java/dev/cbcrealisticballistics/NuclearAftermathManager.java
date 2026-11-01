@@ -288,10 +288,11 @@ public final class NuclearAftermathManager {
             boolean heavy = horizontalDistanceSquared
                     <= (double) profile.heavyStructureRadius() * profile.heavyStructureRadius();
             if (protrusion < 2 && !severe && !isFragileVegetation(topState)) return;
-            int baselineY = Math.min(topY, (int) Math.floor(blast.y()));
-            int depth = severe
-                    ? Math.min(MAX_COLUMN_DEPTH, Math.max(1, topY - baselineY + 1))
-                    : Math.min(MAX_COLUMN_DEPTH, protrusion + 6);
+            boolean exposedStructure = !isLikelyTerrain(topState);
+            if (!exposedStructure && protrusion < 2 && !isFragileVegetation(topState)) return;
+            int depth = severe || (heavy && exposedStructure)
+                    ? MAX_COLUMN_DEPTH
+                    : Math.min(MAX_COLUMN_DEPTH, protrusion + 8);
             int towardX = Integer.compare((int) Math.floor(blast.x()), pos.getX());
             int towardZ = Integer.compare((int) Math.floor(blast.z()), pos.getZ());
             if (Math.abs(blast.x() - pos.getX()) >= Math.abs(blast.z() - pos.getZ())) towardZ = 0;
@@ -305,13 +306,17 @@ public final class NuclearAftermathManager {
                 budget.inspect();
                 if (state.isAir() || NuclearGlassSupport.isGlass(state)
                         || state.getDestroySpeed(level, pos) < 0.0f) continue;
+                boolean terrain = isLikelyTerrain(state);
+                // Once the real ground is reached the structure is complete.
+                // Flash processing handles grass/path conversion separately.
+                if (terrain) break;
                 boolean fragile = isFragileVegetation(state);
                 if (fragile) {
                     if (removeWithoutDrops(pos, state)) budget.change();
                     continue;
                 }
                 boolean massive = isMassive(state, pos);
-                if (severe && (pos.getY() > baselineY || !isLikelyTerrain(state))) {
+                if (severe) {
                     // Ordinary buildings cannot remain in the inner half of
                     // the pressure radius. Only genuinely blast-resistant
                     // material receives a chance to survive there.
@@ -324,7 +329,7 @@ public final class NuclearAftermathManager {
                     continue;
                 }
                 BlockPos front = pos.offset(towardX, 0, towardZ);
-                if (!level.getBlockState(front).isAir() && offset > 0) continue;
+                if (!heavy && !level.getBlockState(front).isAir() && offset > 0) continue;
                 double distanceSquared = distanceSquared(blast, pos);
                 if (distanceSquared <= (double) blast.craterRadius() * blast.craterRadius()) continue;
                 double energy = waveEnergy(blast, pos, lx, lz);
@@ -333,7 +338,7 @@ public final class NuclearAftermathManager {
                 float hardness = Math.max(0.0f, state.getDestroySpeed(level, pos));
                 double material = 1.0 / (1.0 + resistance / 8.0 + hardness / 10.0);
                 double chance = Math.min(0.92, Math.max(0.0, (energy - 0.12) * 0.55 * material));
-                if (heavy && !isLikelyTerrain(state)) {
+                if (heavy) {
                     chance = Math.max(chance, massive ? 0.48 : 0.92);
                 }
                 if (deterministicUnit(blast.sequence(), pos) < chance
