@@ -264,7 +264,7 @@ public final class NuclearBlastManager {
                 budget.inspect();
                 BlockState floor = level.getBlockState(pos);
                 if (isScorchableSurface(floor)
-                        && level.setBlock(pos, Blocks.DIRT.defaultBlockState(), REMOVE_FLAGS)) {
+                        && level.setBlock(pos, Blocks.COARSE_DIRT.defaultBlockState(), REMOVE_FLAGS)) {
                     budget.change();
                 }
                 return;
@@ -273,24 +273,29 @@ public final class NuclearBlastManager {
             if (craterEnabled
                     && distance <= profile.outerTerrainRadius() + BLOCK_HALF_DIAGONAL) {
                 int rim = profile.rimLayers(distance);
-                int rimBaseY = Math.min(topY, groundY);
-                BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(bx, rimBaseY, bz);
+                int desiredSurfaceY = Math.min(level.getMaxBuildHeight() - 1, groundY + rim);
+                int foundationY = Math.max(
+                        level.getMinBuildHeight(),
+                        groundY - Math.max(4, profile.rimHeight())
+                );
+                BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(bx, groundY, bz);
                 BlockState originalBase = level.getBlockState(pos);
                 BlockState fill = rimMaterial(originalBase);
-                for (int by = topY; by >= rimBaseY; --by) {
+                // Remove every structure above the final rim profile first.
+                for (int by = topY; by > desiredSurfaceY; --by) {
                     pos.setY(by);
                     budget.inspect();
                     BlockState state = level.getBlockState(pos);
                     if (removeWithoutDrops(level, pos, state)) budget.change();
                 }
-                pos.setY(rimBaseY);
-                budget.inspect();
-                if (level.getBlockState(pos).isAir()
-                        && level.setBlock(pos, fill, REMOVE_FLAGS)) budget.change();
-                for (int layer = 0; layer < rim; ++layer) {
-                    pos.setY(rimBaseY + 1 + layer);
+                // Replace the complete foundation-to-surface volume. This
+                // prevents buried buildings, paths and caves from leaving a
+                // hollow rim or breaking through it after later block updates.
+                for (int by = foundationY; by <= desiredSurfaceY; ++by) {
+                    pos.setY(by);
                     budget.inspect();
-                    if (!level.getBlockState(pos).isAir()) break;
+                    BlockState state = level.getBlockState(pos);
+                    if (state.is(Blocks.BEDROCK) || state.equals(fill)) continue;
                     if (level.setBlock(pos, fill, REMOVE_FLAGS)) budget.change();
                 }
                 return;
@@ -306,7 +311,9 @@ public final class NuclearBlastManager {
             if (state.is(Blocks.GRASS_BLOCK)
                     || state.is(Blocks.MYCELIUM)
                     || state.is(Blocks.PODZOL)
-                    || state.is(Blocks.MOSS_BLOCK)) {
+                    || state.is(Blocks.MOSS_BLOCK)
+                    || state.is(Blocks.DIRT_PATH)
+                    || state.is(Blocks.FARMLAND)) {
                 if (level.setBlock(top, Blocks.COARSE_DIRT.defaultBlockState(), REMOVE_FLAGS)) budget.change();
                 return;
             }

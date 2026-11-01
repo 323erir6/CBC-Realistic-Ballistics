@@ -24,8 +24,8 @@ public final class NuclearBlastProfileTest {
         }
         NuclearBlastProfile mini = NuclearBlastProfile.byOrdinal(2);
         if (mini.thermalFlashRadius() != 425
-                || mini.severeStructureRadius() != 213
-                || mini.heavyStructureRadius() != 383) {
+                || mini.severeStructureRadius() != 425
+                || mini.heavyStructureRadius() != 680) {
             throw new AssertionError("Mini H-bomb aftermath radii are inconsistent");
         }
     }

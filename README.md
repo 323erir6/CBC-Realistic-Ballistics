@@ -1,5 +1,13 @@
 # CBC Realistic Ballistics
 
+## 2.0.0 - sealed crater rim and wide structural devastation
+
+- Raised crater rims are rebuilt as a solid foundation-to-surface volume, removing buried structures and shallow cavities.
+- The aftermath pass recognises coarse dirt, paths and related surface blocks as terrain and never re-excavates the completed crater profile.
+- Scorched grass, farmland and paths become coarse dirt so the former green ring cannot regrow.
+- Ordinary structures are fully demolished through half of the shockwave radius and receive heavy damage through 80%; only genuinely massive materials retain meaningful survival odds.
+- Nuclear entity scanning remains bounded by the 1.5 ms shared wave budget introduced in 1.9.30.
+
 ## 1.9.30 - bounded primary damage wave
 
 - The initial nuclear damage wave no longer walks every loaded entity in one server tick.

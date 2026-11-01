@@ -28,11 +28,11 @@ public record NuclearBlastProfile(
     }
 
     public int severeStructureRadius() {
-        return Math.max(outerTerrainRadius(), (int) Math.round(glassRadius * 0.25));
+        return Math.max(outerTerrainRadius(), (int) Math.round(glassRadius * 0.50));
     }
 
     public int heavyStructureRadius() {
-        return Math.max(severeStructureRadius(), (int) Math.round(glassRadius * 0.45));
+        return Math.max(severeStructureRadius(), (int) Math.round(glassRadius * 0.80));
     }
 
     public int craterFloorY(int groundY, double horizontalDistance) {

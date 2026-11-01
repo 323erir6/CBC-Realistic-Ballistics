@@ -30,5 +30,9 @@ public final class NuclearAftermathGeometryTest {
         if (!(straight == 1.0 && straight > oneTurn && oneTurn > twoTurns)) {
             throw new AssertionError("Every wave turn must consume additional energy");
         }
+        if (!NuclearAftermathManager.isLikelyTerrainPath("coarse_dirt")
+                || !NuclearAftermathManager.isLikelyTerrainPath("dirt_path")) {
+            throw new AssertionError("Crater rim and paths must be protected as terrain");
+        }
     }
 }

@@ -247,7 +247,7 @@ public final class NuclearAftermathManager {
                     continue;
                 }
                 if (isScorchableGround(state)) {
-                    if (level.setBlock(pos, Blocks.DIRT.defaultBlockState(), REMOVE_FLAGS)) {
+                    if (level.setBlock(pos, Blocks.COARSE_DIRT.defaultBlockState(), REMOVE_FLAGS)) {
                         budget.change();
                     }
                     break;
@@ -279,6 +279,10 @@ public final class NuclearAftermathManager {
             double horizontalDistanceSquared = horizontalDx * horizontalDx
                     + horizontalDz * horizontalDz;
             NuclearBlastProfile profile = blast.profile();
+            // Crater excavation owns this complete volume. Re-processing its
+            // coarse-dirt rim as a structure was the source of hollow hills.
+            double terrainRadius = profile.outerTerrainRadius() + Math.sqrt(0.5);
+            if (horizontalDistanceSquared <= terrainRadius * terrainRadius) return;
             boolean severe = horizontalDistanceSquared
                     <= (double) profile.severeStructureRadius() * profile.severeStructureRadius();
             boolean heavy = horizontalDistanceSquared
@@ -306,8 +310,17 @@ public final class NuclearAftermathManager {
                     if (removeWithoutDrops(pos, state)) budget.change();
                     continue;
                 }
+                boolean massive = isMassive(state, pos);
                 if (severe && (pos.getY() > baselineY || !isLikelyTerrain(state))) {
-                    if (removeWithoutDrops(pos, state)) budget.change();
+                    // Ordinary buildings cannot remain in the inner half of
+                    // the pressure radius. Only genuinely blast-resistant
+                    // material receives a chance to survive there.
+                    double survival = massive
+                            ? Math.max(0.15, Math.min(0.65, 0.50 / Math.max(0.25, waveEnergy(
+                            blast, pos, lx, lz))))
+                            : 0.0;
+                    if (deterministicUnit(blast.sequence(), pos) >= survival
+                            && removeWithoutDrops(pos, state)) budget.change();
                     continue;
                 }
                 BlockPos front = pos.offset(towardX, 0, towardZ);
@@ -320,7 +333,9 @@ public final class NuclearAftermathManager {
                 float hardness = Math.max(0.0f, state.getDestroySpeed(level, pos));
                 double material = 1.0 / (1.0 + resistance / 8.0 + hardness / 10.0);
                 double chance = Math.min(0.92, Math.max(0.0, (energy - 0.12) * 0.55 * material));
-                if (heavy && !isLikelyTerrain(state)) chance = Math.max(chance, 0.72);
+                if (heavy && !isLikelyTerrain(state)) {
+                    chance = Math.max(chance, massive ? 0.48 : 0.92);
+                }
                 if (deterministicUnit(blast.sequence(), pos) < chance
                         && removeWithoutDrops(pos, state)) budget.change();
             }
@@ -381,6 +396,11 @@ public final class NuclearAftermathManager {
             return level.setBlock(pos, Blocks.AIR.defaultBlockState(), REMOVE_FLAGS);
         }
 
+        private boolean isMassive(BlockState state, BlockPos pos) {
+            return state.getBlock().getExplosionResistance() >= 30.0f
+                    || state.getDestroySpeed(level, pos) >= 12.0f;
+        }
+
         private void nextRecord() {
             recordIndex++;
             sectionIndex = 0;
@@ -392,10 +412,18 @@ public final class NuclearAftermathManager {
         }
     }
 
-    private static boolean isLikelyTerrain(BlockState state) {
+    static boolean isLikelyTerrain(BlockState state) {
         String path = net.minecraft.core.registries.BuiltInRegistries.BLOCK
                 .getKey(state.getBlock()).getPath();
-        return path.equals("dirt") || path.equals("grass_block") || path.equals("stone")
+        return isLikelyTerrainPath(path);
+    }
+
+    static boolean isLikelyTerrainPath(String path) {
+        return path.equals("dirt") || path.equals("coarse_dirt")
+                || path.equals("rooted_dirt") || path.equals("dirt_path")
+                || path.equals("farmland") || path.equals("grass_block")
+                || path.equals("podzol") || path.equals("mycelium")
+                || path.equals("moss_block") || path.equals("stone")
                 || path.equals("deepslate") || path.equals("netherrack")
                 || path.equals("end_stone") || path.equals("gravel") || path.equals("clay")
                 || path.equals("snow_block") || path.equals("ice")
@@ -417,13 +445,18 @@ public final class NuclearAftermathManager {
     }
 
     private static boolean isScorchableGround(BlockState state) {
-        return state.is(Blocks.GRASS_BLOCK)
+        if (state.is(Blocks.GRASS_BLOCK)
                 || state.is(Blocks.DIRT_PATH)
                 || state.is(Blocks.FARMLAND)
                 || state.is(Blocks.PODZOL)
                 || state.is(Blocks.MYCELIUM)
                 || state.is(Blocks.MOSS_BLOCK)
-                || state.is(Blocks.ROOTED_DIRT);
+                || state.is(Blocks.ROOTED_DIRT)) return true;
+        String path = net.minecraft.core.registries.BuiltInRegistries.BLOCK
+                .getKey(state.getBlock()).getPath();
+        return path.endsWith("_path") || path.contains("grass_block")
+                || path.endsWith("farmland") || path.endsWith("podzol")
+                || path.endsWith("mycelium") || path.endsWith("moss_block");
     }
 
     static double inverseSquareEnergy(
