@@ -26,6 +26,7 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.ConcurrentModificationException;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -45,9 +46,13 @@ public final class NuclearBlastManager {
     private static final int WINDOW_CHUNK_PROBES_PER_TICK = 512;
     private static final int WINDOW_CHUNK_ENQUEUES_PER_TICK = 16;
     private static final long MAX_WORK_NANOS_PER_TICK = 7_000_000L;
+    private static final int MAX_DAMAGE_DISCOVERY_PER_TICK = 384;
+    private static final int MAX_DAMAGE_EVALUATIONS_PER_TICK = 768;
+    private static final long MAX_DAMAGE_WORK_NANOS_PER_TICK = 1_500_000L;
     private static final double BLOCK_HALF_DIAGONAL = Math.sqrt(0.5);
     private static final List<Job> JOBS = new ArrayList<>();
     private static final List<DamageWave> DAMAGE_WAVES = new ArrayList<>();
+    private static int damageWaveCursor;
 
     private NuclearBlastManager() {
     }
@@ -80,13 +85,25 @@ public final class NuclearBlastManager {
         for (Job job : JOBS) job.releaseTerrainTicket();
         JOBS.clear();
         DAMAGE_WAVES.clear();
+        damageWaveCursor = 0;
     }
 
     private static void processDamageWaves() {
-        Iterator<DamageWave> iterator = DAMAGE_WAVES.iterator();
-        while (iterator.hasNext()) {
-            DamageWave wave = iterator.next();
-            if (!wave.level.getServer().isRunning() || wave.tick()) iterator.remove();
+        if (DAMAGE_WAVES.isEmpty()) return;
+        DamageBudget budget = new DamageBudget();
+        int remainingWaves = DAMAGE_WAVES.size();
+        while (remainingWaves-- > 0 && budget.canContinue()) {
+            if (damageWaveCursor >= DAMAGE_WAVES.size()) damageWaveCursor = 0;
+            DamageWave wave = DAMAGE_WAVES.get(damageWaveCursor);
+            if (!wave.level.getServer().isRunning() || wave.tick(budget)) {
+                DAMAGE_WAVES.remove(damageWaveCursor);
+                if (DAMAGE_WAVES.isEmpty()) {
+                    damageWaveCursor = 0;
+                    return;
+                }
+            } else {
+                damageWaveCursor++;
+            }
         }
     }
 
@@ -465,7 +482,12 @@ public final class NuclearBlastManager {
         final double maximumRadius;
         final long startedGameTime;
         final Set<UUID> hitEntities = new HashSet<>();
-        double previousRadius = -1.0;
+        final Set<UUID> discoveredEntities = new HashSet<>();
+        final List<UUID> candidateEntities = new ArrayList<>();
+        Iterator<Entity> discoveryIterator;
+        int evaluationCursor;
+        int finalSweepCursor = -1;
+        boolean discoveryComplete;
 
         DamageWave(
                 ServerLevel level,
@@ -483,18 +505,23 @@ public final class NuclearBlastManager {
             this.startedGameTime = startedGameTime;
         }
 
-        boolean tick() {
+        boolean tick(DamageBudget budget) {
             long elapsed = level.getGameTime() - startedGameTime;
             double radius = NuclearDamageWaveMath.radius(elapsed, maximumRadius);
             if (radius < 0.0) return false;
-
+            discoverCandidates(budget);
             double radiusSquared = radius * radius;
-            double previousSquared = previousRadius < 0.0
-                    ? -1.0
-                    : previousRadius * previousRadius;
-            damageLoadedEntities(previousSquared, radiusSquared);
-            previousRadius = radius;
-            return radius >= maximumRadius;
+            if (radius >= maximumRadius && discoveryComplete) {
+                if (finalSweepCursor < 0) finalSweepCursor = 0;
+                while (finalSweepCursor < candidateEntities.size()
+                        && budget.canEvaluate()) {
+                    damageCandidate(candidateEntities.get(finalSweepCursor++), radiusSquared);
+                    budget.evaluated();
+                }
+                return finalSweepCursor >= candidateEntities.size();
+            }
+            evaluateCurrentCandidates(radiusSquared, budget);
+            return false;
         }
 
         void catchUpChunk(ChunkPos chunkPos) {
@@ -531,32 +558,91 @@ public final class NuclearBlastManager {
             }
         }
 
-        private void damageLoadedEntities(
-                double innerRadiusSquared, double outerRadiusSquared
-        ) {
-            // Iterating the level's loaded entities is far cheaper than asking
-            // the section manager to traverse an AABB up to 3,600 blocks wide.
-            for (Entity candidate : level.getAllEntities()) {
-                if (!(candidate instanceof LivingEntity entity)
-                        || !isDamageable(entity)
-                        || hitEntities.contains(entity.getUUID())) continue;
-                double dx = entity.getX() - x;
-                double dz = entity.getZ() - z;
-                double horizontalDistanceSquared = dx * dx + dz * dz;
-                if (horizontalDistanceSquared < innerRadiusSquared
-                        || horizontalDistanceSquared > outerRadiusSquared) continue;
-                float damage = NuclearDamageWaveMath.damage(
-                        Math.sqrt(horizontalDistanceSquared), maximumRadius);
-                if (damage <= 0.0f) continue;
-                entity.hurt(level.damageSources().genericKill(), damage);
-                hitEntities.add(entity.getUUID());
+        private void discoverCandidates(DamageBudget budget) {
+            if (discoveryComplete) return;
+            if (discoveryIterator == null) discoveryIterator = level.getAllEntities().iterator();
+            try {
+                while (budget.canDiscover() && discoveryIterator.hasNext()) {
+                    Entity candidate = discoveryIterator.next();
+                    budget.discovered();
+                    if (candidate instanceof LivingEntity entity
+                            && isDamageable(entity)
+                            && discoveredEntities.add(entity.getUUID())) {
+                        candidateEntities.add(entity.getUUID());
+                    }
+                }
+                if (!discoveryIterator.hasNext()) {
+                    discoveryIterator = null;
+                    discoveryComplete = true;
+                }
+            } catch (ConcurrentModificationException changedDuringIteration) {
+                // Entity collections may rotate while the scan is spread over
+                // several ticks. Restart safely; UUID de-duplication preserves
+                // prior progress and, crucially, no tick loses its time cap.
+                discoveryIterator = null;
             }
+        }
+
+        private void evaluateCurrentCandidates(double radiusSquared, DamageBudget budget) {
+            int available = candidateEntities.size();
+            int checked = 0;
+            while (checked++ < available && budget.canEvaluate()) {
+                if (evaluationCursor >= candidateEntities.size()) evaluationCursor = 0;
+                damageCandidate(candidateEntities.get(evaluationCursor++), radiusSquared);
+                budget.evaluated();
+            }
+        }
+
+        private void damageCandidate(UUID entityId, double radiusSquared) {
+            if (hitEntities.contains(entityId)) return;
+            Entity candidate = level.getEntity(entityId);
+            if (!(candidate instanceof LivingEntity entity) || !isDamageable(entity)) return;
+            double dx = entity.getX() - x;
+            double dz = entity.getZ() - z;
+            double horizontalDistanceSquared = dx * dx + dz * dz;
+            if (horizontalDistanceSquared > radiusSquared) return;
+            float damage = NuclearDamageWaveMath.damage(
+                    Math.sqrt(horizontalDistanceSquared), maximumRadius);
+            if (damage <= 0.0f) return;
+            entity.hurt(level.damageSources().genericKill(), damage);
+            hitEntities.add(entityId);
         }
 
         private static boolean isDamageable(LivingEntity entity) {
             if (!entity.isAlive()) return false;
             return !(entity instanceof ServerPlayer player)
                     || (!player.isCreative() && !player.isSpectator());
+        }
+    }
+
+    /** Shared hard cap for all active waves in one server tick. */
+    private static final class DamageBudget {
+        final long deadline = System.nanoTime() + MAX_DAMAGE_WORK_NANOS_PER_TICK;
+        int discoveries;
+        int evaluations;
+
+        boolean canContinue() {
+            return System.nanoTime() < deadline
+                    && (discoveries < MAX_DAMAGE_DISCOVERY_PER_TICK
+                    || evaluations < MAX_DAMAGE_EVALUATIONS_PER_TICK);
+        }
+
+        boolean canDiscover() {
+            return discoveries < MAX_DAMAGE_DISCOVERY_PER_TICK
+                    && System.nanoTime() < deadline;
+        }
+
+        boolean canEvaluate() {
+            return evaluations < MAX_DAMAGE_EVALUATIONS_PER_TICK
+                    && System.nanoTime() < deadline;
+        }
+
+        void discovered() {
+            discoveries++;
+        }
+
+        void evaluated() {
+            evaluations++;
         }
     }
 

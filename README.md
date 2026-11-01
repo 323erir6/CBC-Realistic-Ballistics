@@ -1,5 +1,12 @@
 # CBC Realistic Ballistics
 
+## 1.9.30 - bounded primary damage wave
+
+- The initial nuclear damage wave no longer walks every loaded entity in one server tick.
+- Entity discovery and damage evaluation are incremental and share a strict 1.5 ms global budget across simultaneous detonations.
+- Candidate UUIDs are de-duplicated, while a final bounded sweep preserves the complete damage radius and creative/spectator immunity.
+- Projectile flight and the completed crater/aftermath model are unchanged.
+
 ## 1.9.29 - thermal flash and realistic structural hierarchy
 
 - Foliage and fragile plants are read from the real world-surface heightmap and are easier to remove than trunks.
