@@ -45,6 +45,7 @@ public final class NuclearBlastManager {
     private static final int MAX_INSPECTIONS_PER_TICK = 24000;
     private static final int WINDOW_CHUNK_PROBES_PER_TICK = 512;
     private static final int WINDOW_CHUNK_ENQUEUES_PER_TICK = 16;
+    private static final int MAX_TERRAIN_SEARCH_DEPTH = 128;
     private static final long MAX_WORK_NANOS_PER_TICK = 7_000_000L;
     private static final int MAX_DAMAGE_DISCOVERY_PER_TICK = 384;
     private static final int MAX_DAMAGE_EVALUATIONS_PER_TICK = 768;
@@ -122,7 +123,6 @@ public final class NuclearBlastManager {
         final DamageWave damageWave;
         final int centerX;
         final int centerZ;
-        final int groundY;
         final int scorchRadius;
         final int terrainRadius;
         final boolean craterEnabled;
@@ -155,9 +155,11 @@ public final class NuclearBlastManager {
             this.damageWave = damageWave;
             this.centerX = (int) Math.floor(x);
             this.centerZ = (int) Math.floor(z);
-            int surface = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, centerX, centerZ) - 1;
-            this.groundY = Math.min((int) Math.floor(y), surface);
-            this.craterEnabled = y - surface <= Math.max(24.0, profile.craterRadius() * 0.6);
+            int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, centerX, centerZ) - 1;
+            int naturalSurface = findTerrainSurfaceY(centerX, centerZ, top, null);
+            boolean hasNaturalGround = naturalSurface != Integer.MIN_VALUE;
+            this.craterEnabled = hasNaturalGround
+                    && y - naturalSurface <= Math.max(24.0, profile.craterRadius() * 0.6);
             float cloudRadius = switch (profileOrdinal(profile)) {
                 case 1 -> 130.0f;
                 case 2 -> 170.0f;
@@ -210,7 +212,8 @@ public final class NuclearBlastManager {
                 // the travelling front had already passed their position.
                 damageWave.catchUpChunk(chunkPos);
                 while (terrainColumnIndex < 256 && budget.canStartWork()) {
-                    if (!budget.canProcessColumn(profile.craterDepth() + profile.rimHeight() + 2)) return;
+                    if (!budget.canProcessColumn(MAX_TERRAIN_SEARCH_DEPTH
+                            + profile.craterDepth() + profile.rimHeight() + 2)) return;
                     int local = terrainColumnIndex++;
                     int bx = chunkPos.getMinBlockX() + (local & 15);
                     int bz = chunkPos.getMinBlockZ() + (local >>> 4);
@@ -242,12 +245,19 @@ public final class NuclearBlastManager {
             BlockPos top = new BlockPos(bx, topY, bz);
 
             double craterDistance = Math.max(0.0, distance - BLOCK_HALF_DIAGONAL);
+            boolean terrainShape = craterEnabled
+                    && distance <= profile.outerTerrainRadius() + BLOCK_HALF_DIAGONAL;
+            int localGroundY = terrainShape
+                    ? findTerrainSurfaceY(bx, bz, topY, budget)
+                    : Integer.MIN_VALUE;
             if (craterEnabled && craterDistance <= profile.craterRadius()) {
-                // The floor is absolute. Basing it on topY copied buildings and
-                // trees into the bottom of the crater as raised silhouettes.
+                // The crater depth is measured from the natural local surface,
+                // never from a building and never from the centre column. It
+                // can only excavate existing terrain, not draw a bowl in air.
+                if (localGroundY == Integer.MIN_VALUE) return;
                 int floorY = Math.max(
                         level.getMinBuildHeight(),
-                        profile.craterFloorY(groundY, craterDistance)
+                        profile.craterFloorY(localGroundY, craterDistance)
                 );
                 BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(bx, topY, bz);
                 // A started column is always completed. At most one world-height
@@ -273,13 +283,16 @@ public final class NuclearBlastManager {
 
             if (craterEnabled
                     && distance <= profile.outerTerrainRadius() + BLOCK_HALF_DIAGONAL) {
+                if (localGroundY == Integer.MIN_VALUE) return;
                 int rim = profile.rimLayers(distance);
-                int desiredSurfaceY = Math.min(level.getMaxBuildHeight() - 1, groundY + rim);
+                int desiredSurfaceY = Math.min(
+                        level.getMaxBuildHeight() - 1, localGroundY + rim);
                 int foundationY = Math.max(
                         level.getMinBuildHeight(),
-                        groundY - Math.max(4, profile.rimHeight())
+                        localGroundY - Math.max(4, profile.rimHeight())
                 );
-                BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(bx, groundY, bz);
+                BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(
+                        bx, localGroundY, bz);
                 BlockState originalBase = level.getBlockState(pos);
                 BlockState fill = rimMaterial(originalBase);
                 // Remove every structure above the final rim profile first.
@@ -304,6 +317,19 @@ public final class NuclearBlastManager {
 
             if (!ClaimProtectionHelper.canModifyBlock(level, top)) return;
             if (distance <= scorchRadius) scorchSurface(top, budget);
+        }
+
+        private int findTerrainSurfaceY(int bx, int bz, int topY, Budget budget) {
+            int minimumY = Math.max(
+                    level.getMinBuildHeight(), topY - MAX_TERRAIN_SEARCH_DEPTH);
+            BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(bx, topY, bz);
+            for (int by = topY; by >= minimumY; --by) {
+                pos.setY(by);
+                if (budget != null) budget.inspect();
+                BlockState state = level.getBlockState(pos);
+                if (NuclearAftermathManager.isLikelyTerrain(state)) return by;
+            }
+            return Integer.MIN_VALUE;
         }
 
         private void scorchSurface(BlockPos top, Budget budget) {

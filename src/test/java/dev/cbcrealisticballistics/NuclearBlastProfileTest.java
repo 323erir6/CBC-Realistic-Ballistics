@@ -13,6 +13,10 @@ public final class NuclearBlastProfileTest {
             if (!(center < middle && middle < edge && edge == 100)) {
                 throw new AssertionError("Crater bowl must rise continuously towards the edge");
             }
+            int lowerTerrain = profile.craterFloorY(70, profile.craterRadius() * 0.5);
+            if (lowerTerrain != middle - 30 || lowerTerrain > 70) {
+                throw new AssertionError("Crater floor must follow each column's local terrain");
+            }
             if (profile.rimLayers(profile.craterRadius()) != 0
                     || profile.rimLayers(profile.outerTerrainRadius()) != 0
                     || profile.rimLayers(profile.craterRadius() + profile.rimWidth() * 0.5) <= 0) {

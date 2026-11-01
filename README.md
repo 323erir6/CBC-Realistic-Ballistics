@@ -1,5 +1,12 @@
 # CBC Realistic Ballistics
 
+## 2.0.2 - terrain-following crater geometry
+
+- Every crater column now finds the natural local ground beneath buildings, vegetation and water before changing terrain.
+- Bowl depth is measured from that local surface, preventing crater floors from being placed into air above slopes, ravines or low ground.
+- Raised rims also follow the local surface and build upward from actual earth instead of the detonation centre's height.
+- Columns without natural ground in the search depth are left unfilled, so floating structures cannot acquire artificial terrain beneath them.
+
 ## 2.0.1 - closed green band and complete structural columns
 
 - The shallow crater transition is forcibly surfaced with coarse dirt across one full rim width, eliminating the green inner band.
