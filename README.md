@@ -1,5 +1,13 @@
 # CBC Realistic Ballistics
 
+## 1.9.27 - reliable surface wave and faster crater formation
+
+- Damage-wave distance is measured horizontally, so crater slopes and excavated floors cannot escape through vertical offset.
+- Crater chunk processing catches entities that load after the travelling front has already passed them.
+- Already-loaded crater chunks are processed continuously instead of being limited to one chunk per tick.
+- The global crater budget is raised to 3,000 changes and 24,000 inspections with a strict seven-millisecond wall-clock cap.
+- New chunk generation remains limited to one crater chunk per tick to avoid generation and autosave spikes.
+
 ## 1.9.26 - clean crater rim and travelling damage wave
 
 - Blocks whose footprint intersects the crater edge are cleared instead of surviving between circular columns.

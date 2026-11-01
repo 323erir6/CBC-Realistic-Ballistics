@@ -39,10 +39,10 @@ public final class NuclearBlastManager {
     private static final int REMOVE_FLAGS = Block.UPDATE_CLIENTS
             | Block.UPDATE_KNOWN_SHAPE
             | Block.UPDATE_SUPPRESS_DROPS;
-    private static final int MAX_CHANGES_PER_TICK = 900;
-    private static final int MAX_INSPECTIONS_PER_TICK = 8000;
+    private static final int MAX_CHANGES_PER_TICK = 3000;
+    private static final int MAX_INSPECTIONS_PER_TICK = 24000;
     private static final int WINDOW_CHUNK_PROBES_PER_TICK = 64;
-    private static final long MAX_WORK_NANOS_PER_TICK = 3_000_000L;
+    private static final long MAX_WORK_NANOS_PER_TICK = 7_000_000L;
     private static final double BLOCK_HALF_DIAGONAL = Math.sqrt(0.5);
     private static final List<Job> JOBS = new ArrayList<>();
     private static final List<DamageWave> DAMAGE_WAVES = new ArrayList<>();
@@ -52,11 +52,12 @@ public final class NuclearBlastManager {
 
     public static void start(ServerLevel level, double x, double y, double z, int profileOrdinal) {
         NuclearBlastProfile profile = NuclearBlastProfile.byOrdinal(profileOrdinal);
-        DAMAGE_WAVES.add(new DamageWave(
-                level, x, y, z, profileOrdinal, profile.craterRadius(), level.getGameTime()));
+        DamageWave damageWave = new DamageWave(
+                level, x, y, z, profileOrdinal, profile.craterRadius(), level.getGameTime());
+        DAMAGE_WAVES.add(damageWave);
         NuclearBlastHistory.BlastRecord historyRecord = NuclearBlastHistory.record(
                 level, x, y, z, profileOrdinal);
-        JOBS.add(new Job(level, x, y, z, profile, historyRecord));
+        JOBS.add(new Job(level, x, y, z, profile, historyRecord, damageWave));
     }
 
     public static void onServerTickPost(ServerTickEvent.Post event) {
@@ -99,6 +100,7 @@ public final class NuclearBlastManager {
         final double z;
         final NuclearBlastProfile profile;
         final NuclearBlastHistory.BlastRecord historyRecord;
+        final DamageWave damageWave;
         final int centerX;
         final int centerZ;
         final int groundY;
@@ -113,7 +115,7 @@ public final class NuclearBlastManager {
         int windowChunkIndex;
         int sableTargetIndex;
         long heldTerrainChunk = Long.MIN_VALUE;
-        boolean loadedTerrainChunkThisTick;
+        boolean forcedTerrainChunkThisTick;
         boolean terrainDone;
 
         Job(
@@ -122,7 +124,8 @@ public final class NuclearBlastManager {
                 double y,
                 double z,
                 NuclearBlastProfile profile,
-                NuclearBlastHistory.BlastRecord historyRecord
+                NuclearBlastHistory.BlastRecord historyRecord,
+                DamageWave damageWave
         ) {
             this.level = level;
             this.x = x;
@@ -130,6 +133,7 @@ public final class NuclearBlastManager {
             this.z = z;
             this.profile = profile;
             this.historyRecord = historyRecord;
+            this.damageWave = damageWave;
             this.centerX = (int) Math.floor(x);
             this.centerZ = (int) Math.floor(z);
             int surface = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, centerX, centerZ) - 1;
@@ -154,7 +158,7 @@ public final class NuclearBlastManager {
         }
 
         boolean tick(Budget budget) {
-            loadedTerrainChunkThisTick = false;
+            forcedTerrainChunkThisTick = false;
             processTerrain(budget);
             processWindows(budget);
             processSable(budget);
@@ -168,19 +172,24 @@ public final class NuclearBlastManager {
             while (terrainChunkIndex < terrainChunks.size() && budget.canStartWork()) {
                 long packed = terrainChunks.get(terrainChunkIndex);
                 if (heldTerrainChunk != packed) {
-                    if (loadedTerrainChunkThisTick) return;
                     releaseTerrainTicket();
                     ChunkPos chunkPos = new ChunkPos(packed);
-                    level.getChunkSource().addRegionTicket(
-                            CBCRealisticBallistics.NUCLEAR_TERRAIN_TICKET,
-                            chunkPos, 0, packed, false
-                    );
-                    level.getChunk(chunkPos.x, chunkPos.z);
-                    heldTerrainChunk = packed;
-                    loadedTerrainChunkThisTick = true;
+                    if (level.getChunkSource().getChunkNow(chunkPos.x, chunkPos.z) == null) {
+                        if (forcedTerrainChunkThisTick) return;
+                        level.getChunkSource().addRegionTicket(
+                                CBCRealisticBallistics.NUCLEAR_TERRAIN_TICKET,
+                                chunkPos, 0, packed, false
+                        );
+                        level.getChunk(chunkPos.x, chunkPos.z);
+                        heldTerrainChunk = packed;
+                        forcedTerrainChunkThisTick = true;
+                    }
                 }
 
                 ChunkPos chunkPos = new ChunkPos(packed);
+                // Also catches entities from chunks that became active after
+                // the travelling front had already passed their position.
+                damageWave.catchUpChunk(chunkPos);
                 while (terrainColumnIndex < 256 && budget.canStartWork()) {
                     if (!budget.canProcessColumn(profile.craterDepth() + profile.rimHeight() + 2)) return;
                     int local = terrainColumnIndex++;
@@ -192,9 +201,9 @@ public final class NuclearBlastManager {
                 terrainColumnIndex = 0;
                 terrainChunkIndex++;
                 releaseTerrainTicket();
-                // Generating more than one new chunk in one tick recreates the
-                // autosave/TPS spike this queue is intended to remove.
-                return;
+                // Already-loaded chunks may continue within the time budget.
+                // Newly generated chunks remain limited to one per tick.
+                if (forcedTerrainChunkThisTick) return;
             }
             if (terrainChunkIndex >= terrainChunks.size()) {
                 terrainDone = true;
@@ -465,26 +474,47 @@ public final class NuclearBlastManager {
                     ? -1.0
                     : previousRadius * previousRadius;
             AABB bounds = new AABB(
-                    x - radius, y - radius, z - radius,
-                    x + radius, y + radius, z + radius
+                    x - radius, level.getMinBuildHeight(), z - radius,
+                    x + radius, level.getMaxBuildHeight(), z + radius
             );
+            damageEntities(bounds, previousSquared, radiusSquared);
+            previousRadius = radius;
+            return radius >= maximumRadius;
+        }
+
+        void catchUpChunk(ChunkPos chunkPos) {
+            long elapsed = level.getGameTime() - startedGameTime;
+            double radius = NuclearDamageWaveMath.radius(
+                    profileOrdinal, elapsed, maximumRadius);
+            if (radius <= 0.0) return;
+            AABB chunkBounds = new AABB(
+                    chunkPos.getMinBlockX(), level.getMinBuildHeight(), chunkPos.getMinBlockZ(),
+                    chunkPos.getMinBlockX() + 16.0, level.getMaxBuildHeight(),
+                    chunkPos.getMinBlockZ() + 16.0
+            );
+            damageEntities(chunkBounds, -1.0, radius * radius);
+        }
+
+        private void damageEntities(
+                AABB bounds, double innerRadiusSquared, double outerRadiusSquared
+        ) {
             for (LivingEntity entity : level.getEntitiesOfClass(
                     LivingEntity.class,
                     bounds,
                     candidate -> isDamageable(candidate)
                             && !hitEntities.contains(candidate.getUUID())
             )) {
-                double distanceSquared = entity.distanceToSqr(x, y, z);
-                if (distanceSquared < previousSquared || distanceSquared > radiusSquared) continue;
-                double distance = Math.sqrt(distanceSquared);
-                float damage = NuclearDamageWaveMath.damage(distance, maximumRadius);
-                if (damage > 0.0f) {
-                    entity.hurt(level.damageSources().genericKill(), damage);
-                    hitEntities.add(entity.getUUID());
-                }
+                double dx = entity.getX() - x;
+                double dz = entity.getZ() - z;
+                double horizontalDistanceSquared = dx * dx + dz * dz;
+                if (horizontalDistanceSquared < innerRadiusSquared
+                        || horizontalDistanceSquared > outerRadiusSquared) continue;
+                float damage = NuclearDamageWaveMath.damage(
+                        Math.sqrt(horizontalDistanceSquared), maximumRadius);
+                if (damage <= 0.0f) continue;
+                entity.hurt(level.damageSources().genericKill(), damage);
+                hitEntities.add(entity.getUUID());
             }
-            previousRadius = radius;
-            return radius >= maximumRadius;
         }
 
         private static boolean isDamageable(LivingEntity entity) {
