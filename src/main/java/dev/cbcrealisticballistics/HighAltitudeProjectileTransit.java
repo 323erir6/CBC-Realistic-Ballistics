@@ -84,10 +84,21 @@ public final class HighAltitudeProjectileTransit {
     }
 
     public static boolean enabled() {
+        // Entity.isAlwaysTicking is queried while ClientboundAddEntityPacket is
+        // still being handled. On a remote connection that can happen before
+        // NeoForge has installed the synchronized SERVER config on the client.
+        // ConfigValue#get deliberately throws in that window, which used to
+        // disconnect the client as a packet handling error. Transit is only a
+        // server simulation feature, so remaining inactive until the config is
+        // available is both safe and consistent with vanilla client tracking.
+        if (!BallisticsConfig.SPEC.isLoaded()) return false;
         return BallisticsConfig.HIGH_ALTITUDE_TRANSIT_ENABLED.get();
     }
 
     public static double activationAltitude() {
+        // This value is retained for compatibility and is not authoritative
+        // before the synchronized config has arrived.
+        if (!BallisticsConfig.SPEC.isLoaded()) return 350.0;
         return BallisticsConfig.HIGH_ALTITUDE_TRANSIT_MIN_Y.get();
     }
 
