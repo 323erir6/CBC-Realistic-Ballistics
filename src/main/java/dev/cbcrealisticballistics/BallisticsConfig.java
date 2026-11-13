@@ -59,6 +59,7 @@ public final class BallisticsConfig {
     public static final ModConfigSpec.DoubleValue PROJECTILE_DESPAWN_TIMEOUT_SECONDS;
     public static final ModConfigSpec.DoubleValue STATIONARY_PROJECTILE_TIMEOUT_SECONDS;
     public static final ModConfigSpec.BooleanValue HIGH_ALTITUDE_TRANSIT_ENABLED;
+    public static final ModConfigSpec.BooleanValue LOAD_ORDINARY_AUTOCANNON_CHUNKS;
     public static final ModConfigSpec.DoubleValue HIGH_ALTITUDE_TRANSIT_MIN_Y;
     public static final ModConfigSpec.BooleanValue PERFORMANCE_DIAGNOSTICS;
 
@@ -106,6 +107,12 @@ public final class BallisticsConfig {
                         "autocannon, machine-gun, rotary and twin-autocannon rounds are deliberately excluded.",
                         "Military Supplement's 60/80/125/180 mm cannon rounds remain enabled.")
                 .define("highAltitudeTransitEnabled", true);
+        LOAD_ORDINARY_AUTOCANNON_CHUNKS = builder.comment(
+                        "Let ordinary 20 mm autocannon, twin-autocannon, rotary and machine-gun projectiles",
+                        "use the unloaded-chunk transit system. Disabled by default to protect TPS during",
+                        "large bursts. Heavy autocannons and every larger cannon always use transit while",
+                        "highAltitudeTransitEnabled is enabled, regardless of this switch.")
+                .define("loadOrdinaryAutocannonProjectileChunks", false);
         HIGH_ALTITUDE_TRANSIT_MIN_Y = builder.comment(
                         "Legacy compatibility value retained so existing configs remain valid.",
                         "Seamless transit now starts on the first projectile tick at every altitude.")

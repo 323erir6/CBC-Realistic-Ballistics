@@ -110,9 +110,9 @@ public final class HighAltitudeProjectileTransit {
         // cheap: ordinary loaded chunks still use their normal entity tick
         // and exact collision path, while only an actually missed tick is
         // supplied by the manager.
-        return enabled()
-                && !ProjectileExclusions.isCbcAtFixRocket(projectile)
-                && !RealisticFlightModel.isTwentyMillimetreProjectile(projectile);
+        if (!enabled() || ProjectileExclusions.isCbcAtFixRocket(projectile)) return false;
+        return !RealisticFlightModel.isTwentyMillimetreProjectile(projectile)
+                || BallisticsConfig.LOAD_ORDINARY_AUTOCANNON_CHUNKS.get();
     }
 
     public static boolean isActive(AbstractCannonProjectile projectile) {
