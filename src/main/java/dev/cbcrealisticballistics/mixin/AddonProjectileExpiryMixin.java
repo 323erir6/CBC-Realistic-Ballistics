@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import rbasamoyai.createbigcannons.munitions.AbstractCannonProjectile;
 
 /**
- * Shared compatibility for Military Supplement projectile bases which own an
+ * Shared compatibility for addon projectile bases which own an
  * independent lifetime counter. Optional targets let one build support both
  * the current release and older/newer addon layouts without a hard dependency.
  */
@@ -19,7 +19,9 @@ import rbasamoyai.createbigcannons.munitions.AbstractCannonProjectile;
         "com.cainiao1053.cbcmoreshells.munitions.big_cannon.FuzedCannonTorpedoProjectile",
         "com.cainiao1053.cbcmoreshells.munitions.dual_cannon.FuzedDualCannonProjectile",
         "com.cainiao1053.cbcmoreshells.munitions.racked_projectile.FuzedRackedProjectile",
-        "com.cainiao1053.cbcmoreshells.munitions.racked_projectile.FuzedDualRackedProjectile"
+        "com.cainiao1053.cbcmoreshells.munitions.racked_projectile.FuzedDualRackedProjectile",
+        "com.dsvv.cbcat.cannon.heavy_autocannon.munitions.AbstractHeavyAutocannonProjectile",
+        "com.dsvv.cbcat.cannon.heavy_autocannon.munitions.AbstractFuzedHeavyAutocannonProjectile"
 })
 public abstract class AddonProjectileExpiryMixin {
     @Inject(method = "expireProjectile", at = @At("HEAD"), cancellable = true, require = 0)

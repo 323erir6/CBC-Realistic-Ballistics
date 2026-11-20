@@ -60,6 +60,14 @@ val collisionRegressionTest by tasks.registering(JavaExec::class) {
         languageVersion.set(JavaLanguageVersion.of(21))
     })
 }
+val chunkCorridorRegressionTest by tasks.registering(JavaExec::class) {
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("dev.cbcrealisticballistics.ChunkCorridorTest")
+    javaLauncher.set(javaToolchains.launcherFor {
+        languageVersion.set(JavaLanguageVersion.of(21))
+    })
+}
 val nuclearScorchRegressionTest by tasks.registering(JavaExec::class) {
     dependsOn(tasks.testClasses)
     classpath = sourceSets.test.get().runtimeClasspath
@@ -94,6 +102,7 @@ val nuclearDamageWaveRegressionTest by tasks.registering(JavaExec::class) {
 }
 tasks.check {
     dependsOn(collisionRegressionTest)
+    dependsOn(chunkCorridorRegressionTest)
     dependsOn(nuclearScorchRegressionTest)
     dependsOn(nuclearBlastProfileRegressionTest)
     dependsOn(nuclearAftermathGeometryRegressionTest)

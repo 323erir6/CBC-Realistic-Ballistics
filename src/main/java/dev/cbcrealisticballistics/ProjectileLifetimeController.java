@@ -5,6 +5,7 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 
+import net.minecraft.server.level.ServerLevel;
 import rbasamoyai.createbigcannons.munitions.AbstractCannonProjectile;
 import rbasamoyai.createbigcannons.munitions.autocannon.AbstractAutocannonProjectile;
 import rbasamoyai.createbigcannons.munitions.big_cannon.AbstractBigCannonProjectile;
@@ -56,7 +57,9 @@ public final class ProjectileLifetimeController {
 
     /** True only for projectile families whose trajectories this mod owns. */
     public static boolean manages(AbstractCannonProjectile projectile) {
-        if (!BallisticsConfig.ENABLED.get()
+        if (!(projectile.level() instanceof ServerLevel)
+                || !BallisticsConfig.SPEC.isLoaded()
+                || !BallisticsConfig.ENABLED.get()
                 || !BallisticsConfig.DISABLE_PROJECTILE_DESPAWN.get()
                 || ProjectileExclusions.isCbcAtFixRocket(projectile)) {
             return false;

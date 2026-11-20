@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "AddonProjectileExpiryMixin",
+    "AddonProjectileTransitMixin",
     "AbstractCannonProjectileMixin",
     "AbstractAutocannonProjectileMixin",
     "AbstractBigCannonProjectileMixin",

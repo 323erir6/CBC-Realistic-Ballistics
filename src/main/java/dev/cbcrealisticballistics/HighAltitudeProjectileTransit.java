@@ -528,39 +528,8 @@ public final class HighAltitudeProjectileTransit {
     private static boolean traceLoaded(ServerLevel level,
                                        double startX, double startZ,
                                        double endX, double endZ) {
-        int chunkX = blockToChunk(startX);
-        int chunkZ = blockToChunk(startZ);
-        int endChunkX = blockToChunk(endX);
-        int endChunkZ = blockToChunk(endZ);
-        if (!isChunkLoaded(level, chunkX, chunkZ)) return false;
-
-        double dx = endX - startX;
-        double dz = endZ - startZ;
-        int stepX = Double.compare(dx, 0.0);
-        int stepZ = Double.compare(dz, 0.0);
-        double tDeltaX = stepX == 0 ? Double.POSITIVE_INFINITY : 16.0 / Math.abs(dx);
-        double tDeltaZ = stepZ == 0 ? Double.POSITIVE_INFINITY : 16.0 / Math.abs(dz);
-        double nextBoundaryX = stepX > 0 ? (chunkX + 1) * 16.0 : chunkX * 16.0;
-        double nextBoundaryZ = stepZ > 0 ? (chunkZ + 1) * 16.0 : chunkZ * 16.0;
-        double tMaxX = stepX == 0 ? Double.POSITIVE_INFINITY : (nextBoundaryX - startX) / dx;
-        double tMaxZ = stepZ == 0 ? Double.POSITIVE_INFINITY : (nextBoundaryZ - startZ) / dz;
-
-        while (chunkX != endChunkX || chunkZ != endChunkZ) {
-            if (tMaxX < tMaxZ) {
-                chunkX += stepX;
-                tMaxX += tDeltaX;
-            } else if (tMaxZ < tMaxX) {
-                chunkZ += stepZ;
-                tMaxZ += tDeltaZ;
-            } else {
-                chunkX += stepX;
-                chunkZ += stepZ;
-                tMaxX += tDeltaX;
-                tMaxZ += tDeltaZ;
-            }
-            if (!isChunkLoaded(level, chunkX, chunkZ)) return false;
-        }
-        return true;
+        return ChunkCorridor.trace(startX, startZ, endX, endZ,
+                (chunkX, chunkZ) -> isChunkLoaded(level, chunkX, chunkZ));
     }
 
     private static int blockToChunk(double coordinate) {

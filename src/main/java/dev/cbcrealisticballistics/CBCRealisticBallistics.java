@@ -76,12 +76,15 @@ public final class CBCRealisticBallistics {
             return;
         }
         if (ProjectileExclusions.isCbcAtFixRocket(projectile)) return;
-        CbcAtSableRocketLaunchFix.finishSpawn(projectile);
-        double configuredVelocityMps = RealisticFlightModel
-                .configuredMilitaryMuzzleVelocity(projectile);
-        if (configuredVelocityMps > 0.0 && projectile instanceof ImpactVelocityAccess access) {
-            access.cbcRealisticBallistics$setConfiguredLaunchSpeed(configuredVelocityMps / 20.0);
+        if (!event.loadedFromDisk() && !ProjectileTransitSavedData.isRestoringEntity()) {
+            CbcAtSableRocketLaunchFix.finishSpawn(projectile);
+            double configuredVelocityMps = RealisticFlightModel
+                    .configuredMilitaryMuzzleVelocity(projectile);
+            if (configuredVelocityMps > 0.0 && projectile instanceof ImpactVelocityAccess access) {
+                access.cbcRealisticBallistics$setConfiguredLaunchSpeed(configuredVelocityMps / 20.0);
+            }
         }
+        ProjectileLifetimeController.keepAlive(projectile);
         if (!HighAltitudeProjectileTransit.shouldActivate(projectile)) return;
         if (projectile instanceof HighAltitudeTransitAccess access) {
             access.cbcRealisticBallistics$activateHighAltitudeTransit();

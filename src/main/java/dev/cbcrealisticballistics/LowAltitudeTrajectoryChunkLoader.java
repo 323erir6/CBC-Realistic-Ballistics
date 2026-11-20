@@ -587,37 +587,8 @@ public final class LowAltitudeTrajectoryChunkLoader {
             Vec3 to,
             LongArrayList tail
     ) {
-        int chunkX = blockToChunk(from.x);
-        int chunkZ = blockToChunk(from.z);
-        int endChunkX = blockToChunk(to.x);
-        int endChunkZ = blockToChunk(to.z);
-        addTailChunk(level, chunkX, chunkZ, tail);
-
-        double dx = to.x - from.x;
-        double dz = to.z - from.z;
-        int stepX = Double.compare(dx, 0.0);
-        int stepZ = Double.compare(dz, 0.0);
-        double tDeltaX = stepX == 0 ? Double.POSITIVE_INFINITY : 16.0 / Math.abs(dx);
-        double tDeltaZ = stepZ == 0 ? Double.POSITIVE_INFINITY : 16.0 / Math.abs(dz);
-        double boundaryX = stepX > 0 ? (chunkX + 1) * 16.0 : chunkX * 16.0;
-        double boundaryZ = stepZ > 0 ? (chunkZ + 1) * 16.0 : chunkZ * 16.0;
-        double tMaxX = stepX == 0 ? Double.POSITIVE_INFINITY : (boundaryX - from.x) / dx;
-        double tMaxZ = stepZ == 0 ? Double.POSITIVE_INFINITY : (boundaryZ - from.z) / dz;
-        while (chunkX != endChunkX || chunkZ != endChunkZ) {
-            if (tMaxX < tMaxZ) {
-                chunkX += stepX;
-                tMaxX += tDeltaX;
-            } else if (tMaxZ < tMaxX) {
-                chunkZ += stepZ;
-                tMaxZ += tDeltaZ;
-            } else {
-                chunkX += stepX;
-                chunkZ += stepZ;
-                tMaxX += tDeltaX;
-                tMaxZ += tDeltaZ;
-            }
-            if (!addTailChunk(level, chunkX, chunkZ, tail)) break;
-        }
+        ChunkCorridor.trace(from.x, from.z, to.x, to.z,
+                (chunkX, chunkZ) -> addTailChunk(level, chunkX, chunkZ, tail));
     }
 
     /** Ordered DDA used by the rolling collision-correctness window. */
@@ -629,38 +600,8 @@ public final class LowAltitudeTrajectoryChunkLoader {
             LongOpenHashSet unique,
             int maximum
     ) {
-        int chunkX = blockToChunk(from.x);
-        int chunkZ = blockToChunk(from.z);
-        int endChunkX = blockToChunk(to.x);
-        int endChunkZ = blockToChunk(to.z);
-        if (!addOrderedChunk(level, chunkX, chunkZ, order, unique, maximum)) return false;
-
-        double dx = to.x - from.x;
-        double dz = to.z - from.z;
-        int stepX = Double.compare(dx, 0.0);
-        int stepZ = Double.compare(dz, 0.0);
-        double tDeltaX = stepX == 0 ? Double.POSITIVE_INFINITY : 16.0 / Math.abs(dx);
-        double tDeltaZ = stepZ == 0 ? Double.POSITIVE_INFINITY : 16.0 / Math.abs(dz);
-        double boundaryX = stepX > 0 ? (chunkX + 1) * 16.0 : chunkX * 16.0;
-        double boundaryZ = stepZ > 0 ? (chunkZ + 1) * 16.0 : chunkZ * 16.0;
-        double tMaxX = stepX == 0 ? Double.POSITIVE_INFINITY : (boundaryX - from.x) / dx;
-        double tMaxZ = stepZ == 0 ? Double.POSITIVE_INFINITY : (boundaryZ - from.z) / dz;
-        while (chunkX != endChunkX || chunkZ != endChunkZ) {
-            if (tMaxX < tMaxZ) {
-                chunkX += stepX;
-                tMaxX += tDeltaX;
-            } else if (tMaxZ < tMaxX) {
-                chunkZ += stepZ;
-                tMaxZ += tDeltaZ;
-            } else {
-                chunkX += stepX;
-                chunkZ += stepZ;
-                tMaxX += tDeltaX;
-                tMaxZ += tDeltaZ;
-            }
-            if (!addOrderedChunk(level, chunkX, chunkZ, order, unique, maximum)) return false;
-        }
-        return true;
+        return ChunkCorridor.trace(from.x, from.z, to.x, to.z,
+                (chunkX, chunkZ) -> addOrderedChunk(level, chunkX, chunkZ, order, unique, maximum));
     }
 
     private static boolean addOrderedChunk(

@@ -89,12 +89,6 @@ public abstract class AbstractCannonProjectileMixin
     private boolean cbcRealisticBallistics$transitRegistered;
     @Unique
     private boolean cbcRealisticBallistics$trajectoryPlanRegistered;
-    @Unique
-    private boolean cbcRealisticBallistics$waitingForTerrain;
-    @Unique
-    private Vec3 cbcRealisticBallistics$terrainHoldPosition = Vec3.ZERO;
-    @Unique
-    private Vec3 cbcRealisticBallistics$terrainHoldVelocity = Vec3.ZERO;
 
     @Override
     public void cbcRealisticBallistics$setConfiguredLaunchSpeed(double speedBlocksPerTick) {
@@ -267,9 +261,6 @@ public abstract class AbstractCannonProjectileMixin
             }
         }
         Vec3 velocity = projectile.getDeltaMovement();
-        this.cbcRealisticBallistics$waitingForTerrain = false;
-        this.cbcRealisticBallistics$terrainHoldPosition = projectile.position();
-        this.cbcRealisticBallistics$terrainHoldVelocity = velocity;
         double speed = velocity.length();
         if (this.cbcRealisticBallistics$energySpeed < 0.0 && Double.isFinite(speed)) {
             this.cbcRealisticBallistics$energySpeed = speed;
@@ -285,6 +276,23 @@ public abstract class AbstractCannonProjectileMixin
         return velocity.add(getForces(projectile.position(), velocity));
     }
 
+    @Inject(method = "tick", at = @At(value = "INVOKE",
+            target = "Lrbasamoyai/createbigcannons/munitions/AbstractCannonProjectile;clipAndDamage()V"),
+            cancellable = true)
+    private void cbcRealisticBallistics$waitBeforeMoving(CallbackInfo ci) {
+        AbstractCannonProjectile projectile = (AbstractCannonProjectile) (Object) this;
+        if (!(projectile.level() instanceof ServerLevel level)
+                || !HighAltitudeProjectileTransit.isActive(projectile)) return;
+        if (!LowAltitudeTrajectoryChunkLoader.prepareImmediateFlightCorridor(
+                projectile, level, this.cbcRealisticBallistics$getCollisionMovement())) {
+            // Stop before CBC changes position. Moving and undoing it triggered
+            // two entity-section transitions and could notify the client of a
+            // chunk exit even though the projectile never actually left.
+            cbcRealisticBallistics$finishProjectileTickTiming();
+            ci.cancel();
+        }
+    }
+
     @WrapMethod(method = "clipAndDamage")
     private void cbcRealisticBallistics$preserveSableAndEntityCollision(Operation<Void> original) {
         long diagnosticStart = PerformanceDiagnostics.startTiming();
@@ -297,16 +305,6 @@ public abstract class AbstractCannonProjectileMixin
                     && !ProjectileExclusions.isCbcAtFixRocket(projectile)) {
                 ServerLevel serverLevel = (ServerLevel) projectile.level();
                 Vec3 collisionMovement = this.cbcRealisticBallistics$getCollisionMovement();
-                if (HighAltitudeProjectileTransit.isActive(projectile)
-                        && !LowAltitudeTrajectoryChunkLoader.prepareImmediateFlightCorridor(
-                        projectile, serverLevel, collisionMovement)) {
-                    // The CBC tick will still run its cheap bookkeeping, but
-                    // the RETURN hook restores position and velocity. This
-                    // prevents an unloaded chunk from being treated as air.
-                    this.cbcRealisticBallistics$waitingForTerrain = true;
-                    fullCbcPass = false;
-                    return;
-                }
                 boolean potential = HighAltitudeProjectileTransit.hasPotentialLoadedCollision(
                         projectile, serverLevel, collisionMovement);
                 this.cbcRealisticBallistics$emptyBlockCorridor = !potential;
@@ -425,12 +423,6 @@ public abstract class AbstractCannonProjectileMixin
     private void cbcRealisticBallistics$advanceReferenceVelocity(CallbackInfo ci) {
         AbstractCannonProjectile projectile = (AbstractCannonProjectile) (Object) this;
         if (ProjectileExclusions.isCbcAtFixRocket(projectile)) return;
-        if (this.cbcRealisticBallistics$waitingForTerrain) {
-            projectile.setPos(this.cbcRealisticBallistics$terrainHoldPosition);
-            projectile.setDeltaMovement(this.cbcRealisticBallistics$terrainHoldVelocity);
-            this.cbcRealisticBallistics$waitingForTerrain = false;
-            return;
-        }
         // Catch a fast projectile in the same tick in which it crosses Y=-70,
         // rather than allowing one additional full movement step below it.
         if (HighAltitudeProjectileTransit.discardIfOutsideSimulationBounds(projectile)) {
@@ -497,6 +489,11 @@ public abstract class AbstractCannonProjectileMixin
 
     @Inject(method = "tick", at = @At("RETURN"))
     private void cbcRealisticBallistics$recordProjectileTick(CallbackInfo ci) {
+        cbcRealisticBallistics$finishProjectileTickTiming();
+    }
+
+    @Unique
+    private void cbcRealisticBallistics$finishProjectileTickTiming() {
         long started = this.cbcRealisticBallistics$diagnosticTickStart;
         if (started == 0L) return;
         this.cbcRealisticBallistics$diagnosticTickStart = 0L;
